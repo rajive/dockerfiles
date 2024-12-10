@@ -1,0 +1,3 @@
+# Connext Pro YAML config
+CompileFlags:
+  Add: [-DRTI_UNIX, -DRTI_LINUX, -DRTI_64BIT, -I/opt/rti.com/NDDSHOME/include, -I/opt/rti.com/NDDSHOME/include/ndds, -I/opt/rti.com/NDDSHOME/include/ndds/hpp ]
