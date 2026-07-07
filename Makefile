@@ -1,10 +1,13 @@
 .PHONY: *  # all targets are named recipes, that can be executed
 
-RTI_LICENSE_FILE=~/rti/licenses/rti_license.dat
-DOMAIN=0
 MY_DOCKER_HUB_ID=rajive7400
-MY_NET=my-net
+RTI_LICENSE_FILE=~/rti/licenses/rti_license.dat
+
+CONNEXT_VERSION ?= 7.7.0
 CONTAINER_ENGINE ?= podman
+
+DOMAIN=0
+MY_NET=my-net
 
 default: connext-sdk-dev
 
@@ -17,7 +20,7 @@ ${MY_NET}:
 cds.svc:
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
+		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
 		--name=$@ \
 		rticom/cloud-discovery-service \
 		-cfgName defaultWAN
@@ -45,8 +48,8 @@ cds.sub cds.sub.%:
 rec.svc:
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
-		--mount type=volume,source=recording_service_database,target=/home/rtiuser/rti_workspace/7.3.0/database \
+		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
+		--mount type=volume,source=recording_service_database,target=/home/rtiuser/rti_workspace/${CONNEXT_VERSION}/database \
 		--name=$@ \
 		rticom/recording-service \
 		-cfgName default
@@ -54,8 +57,8 @@ rec.svc:
 rpl.svc:
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
-		--mount type=volume,source=recording_service_database,target=/home/rtiuser/rti_workspace/7.3.0/database \
+		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
+		--mount type=volume,source=recording_service_database,target=/home/rtiuser/rti_workspace/${CONNEXT_VERSION}/database \
 		--name=$@ \
 		rticom/replay-service \
 		-cfgName default
@@ -64,7 +67,7 @@ rpl.svc:
 mem.per.svc:
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
+		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
 		--name=$@ \
 		rticom/persistence-service \
 		-cfgName default
@@ -72,8 +75,8 @@ mem.per.svc:
 dsk.per.svc:
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
-		--mount type=volume,source=persistence_service_database,target=/home/rtiuser/rti_workspace/7.3.0/database \
+		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
+		--mount type=volume,source=persistence_service_database,target=/home/rtiuser/rti_workspace/${CONNEXT_VERSION}/database \
 		--name=$@ \
 		rticom/persistence-service \
 		-cfgName defaultDisk
@@ -92,17 +95,17 @@ per.sub per.sub.%:
 web.svc:
 	${CONTAINER_ENGINE} run -it --rm \
 		--network host \
-		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
+		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
 		--name=$@ \
 		rticom/web-integration-service \
 		-cfgName shapesDemoTutorial \
-		-documentRoot /home/rtiuser/rti_workspace/7.3.0/examples/web_integration_service
+		-documentRoot /home/rtiuser/rti_workspace/${CONNEXT_VERSION}/examples/web_integration_service
 
 # --- Perftest ---
 prf.pub.thr prf.pub.thr.%:
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
+		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
 		--name=$@-${DOMAIN} \
 		rticom/perftest \
 		-pub -dataLen 1024 -executionTime 60 \
@@ -111,7 +114,7 @@ prf.pub.thr prf.pub.thr.%:
 prf.pub.lat prf.pub.lat.%:
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
+		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
 		--name=$@-${DOMAIN} \
 		rticom/perftest -latencyTest \
 		-pub -dataLen 1024 -executionTime 60 \
@@ -120,7 +123,7 @@ prf.pub.lat prf.pub.lat.%:
 prf.sub prf.sub.%:
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
+		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
 		--name=$@-${DOMAIN} \
 		rticom/perftest \
 		-sub -dataLen 1024 \
@@ -163,7 +166,7 @@ sub sub.%:
 connext-sdk-dev connext-sdk-dev.%:
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat:ro \
+		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat:ro \
 		-v home:/home \
 		-v ~/.config/nvim:/home/rtiuser/.config/nvim:ro \
 		-v ~/code:/home/rtiuser/code \
@@ -191,7 +194,7 @@ xubuntu:
 connext-tools:
 	${CONTAINER_ENGINE} run -d --rm \
 		--network ${MY_NET} \
-		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
+		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
 		-v home:/home \
 		-v ~/.config/nvim:/home/user/.config/nvim:ro \
 		-v ~/code:/home/user/code:ro \
