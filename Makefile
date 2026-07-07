@@ -4,17 +4,18 @@ RTI_LICENSE_FILE=~/rti/licenses/rti_license.dat
 DOMAIN=0
 MY_DOCKER_HUB_ID=rajive7400
 MY_NET=my-net
+CONTAINER_ENGINE ?= podman
 
 default: connext-sdk-dev
 
 # -- My Network (bridge) ---
 ${MY_NET}:
-	docker network create -d bridge ${MY_NET}
+	${CONTAINER_ENGINE} network create -d bridge ${MY_NET}
 
 # --- Cloud Discovery Service ---
 # must be the first container on the network
 cds.svc:
-	docker run -it --rm \
+	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
 		--name=$@ \
@@ -22,7 +23,7 @@ cds.svc:
 		-cfgName defaultWAN
 
 cds.pub cds.pub.%:
-	docker run -it --rm \
+	${CONTAINER_ENGINE} run -it --rm \
 		-e NDDS_DISCOVERY_PEERS="rtps@udpv4://cds.svc:7400" \
 		--network ${MY_NET} \
 		--name=$@ \
@@ -32,7 +33,7 @@ cds.pub cds.pub.%:
 		-domain ${DOMAIN}
 
 cds.sub cds.sub.%:
-	docker run -it --rm \
+	${CONTAINER_ENGINE} run -it --rm \
 		-e NDDS_DISCOVERY_PEERS="rtps@udpv4://cds.svc:7400" \
 		--network ${MY_NET} \
 		--name=$@ \
@@ -42,7 +43,7 @@ cds.sub cds.sub.%:
 
 # --- Record and Replay ---
 rec.svc:
-	docker run -it --rm \
+	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
 		--mount type=volume,source=recording_service_database,target=/home/rtiuser/rti_workspace/7.3.0/database \
@@ -51,7 +52,7 @@ rec.svc:
 		-cfgName default
 
 rpl.svc:
-	docker run -it --rm \
+	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
 		--mount type=volume,source=recording_service_database,target=/home/rtiuser/rti_workspace/7.3.0/database \
@@ -61,7 +62,7 @@ rpl.svc:
 
 # --- Persistence Service --- (fails)
 mem.per.svc:
-	docker run -it --rm \
+	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
 		--name=$@ \
@@ -69,7 +70,7 @@ mem.per.svc:
 		-cfgName default
 
 dsk.per.svc:
-	docker run -it --rm \
+	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
 		--mount type=volume,source=persistence_service_database,target=/home/rtiuser/rti_workspace/7.3.0/database \
@@ -78,7 +79,7 @@ dsk.per.svc:
 		-cfgName defaultDisk
 
 per.sub per.sub.%:
-	docker run -it --rm \
+	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		--name=$@-${DOMAIN} \
 		rticom/dds-ping \
@@ -89,7 +90,7 @@ per.sub per.sub.%:
 
 # --- Web Integration Service ---
 web.svc:
-	docker run -it --rm \
+	${CONTAINER_ENGINE} run -it --rm \
 		--network host \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
 		--name=$@ \
@@ -99,7 +100,7 @@ web.svc:
 
 # --- Perftest ---
 prf.pub.thr prf.pub.thr.%:
-	docker run -it --rm \
+	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
 		--name=$@-${DOMAIN} \
@@ -108,7 +109,7 @@ prf.pub.thr prf.pub.thr.%:
 		-domain ${DOMAIN}
 
 prf.pub.lat prf.pub.lat.%:
-	docker run -it --rm \
+	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
 		--name=$@-${DOMAIN} \
@@ -117,7 +118,7 @@ prf.pub.lat prf.pub.lat.%:
 		-domain ${DOMAIN}
 
 prf.sub prf.sub.%:
-	docker run -it --rm \
+	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
 		--name=$@-${DOMAIN} \
@@ -127,7 +128,7 @@ prf.sub prf.sub.%:
 
 # --- Spy ---
 spy spy.%:
-	docker run -it --rm \
+	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		--name=$@-${DOMAIN} \
 		rticom/dds-spy \
@@ -136,7 +137,7 @@ spy spy.%:
 
 # --- Ping ---
 pub pub.%:
-	docker run -it --rm \
+	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		--name=$@-${DOMAIN} \
 		rticom/dds-ping \
@@ -145,7 +146,7 @@ pub pub.%:
 		-domain ${DOMAIN}
 
 sub sub.%:
-	docker run -it --rm \
+	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		--name=$@-${DOMAIN} \
 		rticom/dds-ping -subscriber \
@@ -160,7 +161,7 @@ sub sub.%:
 #   - neovim: https://github.com/neovim/neovim?tab=readme-ov-file#install-from-package
 
 connext-sdk-dev connext-sdk-dev.%:
-	docker run -it --rm \
+	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat:ro \
 		-v home:/home \
@@ -180,7 +181,7 @@ connext-sdk-dev connext-sdk-dev.%:
 #          --device /dev/dri:/dev/dri \
 # https://github.com/hectorm/docker-xubuntu
 xubuntu:
-	docker run -d --rm \
+	${CONTAINER_ENGINE} run -d --rm \
 	  --name $@ \
 	  --shm-size 2g \
 	  --publish 3322:3322/tcp  \
@@ -188,11 +189,12 @@ xubuntu:
 	  hectorm/xubuntu
 
 connext-tools:
-	docker run -d --rm \
+	${CONTAINER_ENGINE} run -d --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-7.3.0/rti_license.dat \
 		-v home:/home \
 		-v ~/.config/nvim:/home/user/.config/nvim:ro \
+		-v ~/code:/home/user/code:ro \
 		-w /home/user \
 		--name $@ \
 		--shm-size 2g \
@@ -204,29 +206,29 @@ connext-tools:
 
 # login as 'root' user into a container
 root.%:
-	docker exec -u 0 -it $* bash
+	${CONTAINER_ENGINE} exec -u 0 -it $* bash
 
 # login as uid '1000' user into a container
 user.%:
-	docker exec -u 1000 -it $* bash -c 'cd && exec bash'
+	${CONTAINER_ENGINE} exec -u 1000 -it $* bash -c 'cd && exec bash'
 
 # build image
 #	make img.connext-sdk-dev
 #	make img.connext-tools
 img.%:
-	-docker image rm -f ${MY_DOCKER_HUB_ID}/$*
-	docker build -t ${MY_DOCKER_HUB_ID}/$* $*
+	-${CONTAINER_ENGINE} image rm -f ${MY_DOCKER_HUB_ID}/$*
+	${CONTAINER_ENGINE} build -t ${MY_DOCKER_HUB_ID}/$* $*
 
 # push image
 #	make push.connext-sdk-dev
 #	make push.connext-tools
 push.%:
-	docker image push ${MY_DOCKER_HUB_ID}/$*
+	${CONTAINER_ENGINE} image push ${MY_DOCKER_HUB_ID}/$*
 
 
 # prune dangling comtainers and images
 prune:
-	docker system prune
+	${CONTAINER_ENGINE} system prune
 
 prune_all:
-	docker system prune -a
+	${CONTAINER_ENGINE} system prune -a
