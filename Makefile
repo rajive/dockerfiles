@@ -1,31 +1,45 @@
-.PHONY: *  # all targets are named recipes, that can be executed
+.PHONY: default FORCE ensure-network \
+	cds.svc cds.pub cds.sub \
+	rec.svc rpl.svc mem.per.svc dsk.per.svc per.sub \
+	web.svc \
+	prf.pub.thr prf.pub.lat prf.sub \
+	spy pub sub \
+	connext-sdk-dev \
+	xubuntu connext-tools \
+	prune prune_all
 
-MY_DOCKER_HUB_ID=rajive7400
-RTI_LICENSE_FILE=~/rti/licenses/rti_license.dat
+MY_DOCKER_HUB_ID ?= rajive7400
+RTI_LICENSE_FILE ?= ~/rti/licenses/rti_license.dat
 
 CONNEXT_VERSION ?= 7.7.0
 CONTAINER_ENGINE ?= podman
 
-DOMAIN=0
-MY_NET=my-net
+MY_DOMAIN ?= 0
+MY_NET ?= my-net
 
 default: connext-sdk-dev
 
+FORCE:
+
 # -- My Network (bridge) ---
-${MY_NET}:
-	${CONTAINER_ENGINE} network create -d bridge ${MY_NET}
+# Ensure the named bridge network exists before starting containers on it.
+ensure-network:
+	@test -n "${MY_NET}" || { echo "MY_NET must not be empty"; exit 1; }
+	@${CONTAINER_ENGINE} network inspect ${MY_NET} >/dev/null 2>&1 || \
+		${CONTAINER_ENGINE} network create -d bridge ${MY_NET}
 
 # --- Cloud Discovery Service ---
 # must be the first container on the network
-cds.svc:
+cds.svc: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
+		-v ${RTI_LICENSE_FILE}:/opt/rti.com/\
+			rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
 		--name=$@ \
 		rticom/cloud-discovery-service \
 		-cfgName defaultWAN
 
-cds.pub cds.pub.%:
+cds.pub cds.pub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		-e NDDS_DISCOVERY_PEERS="rtps@udpv4://cds.svc:7400" \
 		--network ${MY_NET} \
@@ -33,19 +47,19 @@ cds.pub cds.pub.%:
 		rticom/dds-ping \
 		-reliable \
 		-durability TRANSIENT_LOCAL \
-		-domain ${DOMAIN}
+		-domain ${MY_DOMAIN}
 
-cds.sub cds.sub.%:
+cds.sub cds.sub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		-e NDDS_DISCOVERY_PEERS="rtps@udpv4://cds.svc:7400" \
 		--network ${MY_NET} \
 		--name=$@ \
 		rticom/dds-ping \
 		-subscriber \
-		-domain ${DOMAIN}
+		-domain ${MY_DOMAIN}
 
 # --- Record and Replay ---
-rec.svc:
+rec.svc: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
@@ -54,7 +68,7 @@ rec.svc:
 		rticom/recording-service \
 		-cfgName default
 
-rpl.svc:
+rpl.svc: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
@@ -64,7 +78,7 @@ rpl.svc:
 		-cfgName default
 
 # --- Persistence Service --- (fails)
-mem.per.svc:
+mem.per.svc: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
@@ -72,7 +86,7 @@ mem.per.svc:
 		rticom/persistence-service \
 		-cfgName default
 
-dsk.per.svc:
+dsk.per.svc: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
@@ -81,15 +95,15 @@ dsk.per.svc:
 		rticom/persistence-service \
 		-cfgName defaultDisk
 
-per.sub per.sub.%:
+per.sub per.sub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		--name=$@-${DOMAIN} \
+		--name=$@-${MY_DOMAIN} \
 		rticom/dds-ping \
 		-reliable \
 		-durability TRANSIENT_LOCAL \
 		-subscriber \
-		-domain ${DOMAIN}
+		-domain ${MY_DOMAIN}
 
 # --- Web Integration Service ---
 web.svc:
@@ -102,60 +116,60 @@ web.svc:
 		-documentRoot /home/rtiuser/rti_workspace/${CONNEXT_VERSION}/examples/web_integration_service
 
 # --- Perftest ---
-prf.pub.thr prf.pub.thr.%:
+prf.pub.thr prf.pub.thr.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
-		--name=$@-${DOMAIN} \
+		--name=$@-${MY_DOMAIN} \
 		rticom/perftest \
 		-pub -dataLen 1024 -executionTime 60 \
-		-domain ${DOMAIN}
+		-domain ${MY_DOMAIN}
 
-prf.pub.lat prf.pub.lat.%:
+prf.pub.lat prf.pub.lat.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
-		--name=$@-${DOMAIN} \
+		--name=$@-${MY_DOMAIN} \
 		rticom/perftest -latencyTest \
 		-pub -dataLen 1024 -executionTime 60 \
-		-domain ${DOMAIN}
+		-domain ${MY_DOMAIN}
 
-prf.sub prf.sub.%:
+prf.sub prf.sub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
-		--name=$@-${DOMAIN} \
+		--name=$@-${MY_DOMAIN} \
 		rticom/perftest \
 		-sub -dataLen 1024 \
-		-domain ${DOMAIN}
+		-domain ${MY_DOMAIN}
 
 # --- Spy ---
-spy spy.%:
+spy spy.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		--name=$@-${DOMAIN} \
+		--name=$@-${MY_DOMAIN} \
 		rticom/dds-spy \
 		-printSample \
-		-domain ${DOMAIN}
+		-domain ${MY_DOMAIN}
 
 # --- Ping ---
-pub pub.%:
+pub pub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		--name=$@-${DOMAIN} \
+		--name=$@-${MY_DOMAIN} \
 		rticom/dds-ping \
 		-reliable \
 		-durability TRANSIENT_LOCAL \
-		-domain ${DOMAIN}
+		-domain ${MY_DOMAIN}
 
-sub sub.%:
+sub sub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		--name=$@-${DOMAIN} \
+		--name=$@-${MY_DOMAIN} \
 		rticom/dds-ping -subscriber \
 		-reliable \
 		-durability TRANSIENT_LOCAL \
-		-domain ${DOMAIN}
+		-domain ${MY_DOMAIN}
 
 
 # --- Connext SDK ---
@@ -163,7 +177,7 @@ sub sub.%:
 #   - curl: apt install curl
 #   - neovim: https://github.com/neovim/neovim?tab=readme-ov-file#install-from-package
 
-connext-sdk-dev connext-sdk-dev.%:
+connext-sdk-dev connext-sdk-dev.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat:ro \
@@ -191,7 +205,7 @@ xubuntu:
 	  --publish 3389:3389/tcp  \
 	  hectorm/xubuntu
 
-connext-tools:
+connext-tools: ensure-network
 	${CONTAINER_ENGINE} run -d --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_FILE}:/opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}/rti_license.dat \
@@ -208,24 +222,24 @@ connext-tools:
 # -- Utils ---
 
 # login as 'root' user into a container
-root.%:
+root.%: FORCE
 	${CONTAINER_ENGINE} exec -u 0 -it $* bash
 
 # login as uid '1000' user into a container
-user.%:
+user.%: FORCE
 	${CONTAINER_ENGINE} exec -u 1000 -it $* bash -c 'cd && exec bash'
 
 # build image
 #	make img.connext-sdk-dev
 #	make img.connext-tools
-img.%:
+img.%: FORCE
 	-${CONTAINER_ENGINE} image rm -f ${MY_DOCKER_HUB_ID}/$*
 	${CONTAINER_ENGINE} build -t ${MY_DOCKER_HUB_ID}/$* $*
 
 # push image
 #	make push.connext-sdk-dev
 #	make push.connext-tools
-push.%:
+push.%: FORCE
 	${CONTAINER_ENGINE} image push ${MY_DOCKER_HUB_ID}/$*
 
 
