@@ -8,18 +8,18 @@
 	xubuntu connext-tools \
 	prune prune_all
 
+CONTAINER_ENGINE ?= podman
 MY_DOCKER_HUB_ID ?= rajive7400
-RTI_LICENSE_FILE ?= ~/rti/licenses/rti_license.dat
 
 CONNEXT_VERSION ?= 7.7.0
-CONTAINER_ENGINE ?= podman
+RTI_LICENSE_FILE ?= ~/rti/licenses/rti_license.dat
+
+MY_DOMAIN ?= 0
+MY_NET ?= my-net
 
 CONNEXT_HOME := /opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}
 CONNEXT_WORKSPACE := /home/rtiuser/rti_workspace/${CONNEXT_VERSION}
 RTI_LICENSE_MOUNT := ${RTI_LICENSE_FILE}:${CONNEXT_HOME}/rti_license.dat
-
-MY_DOMAIN ?= 0
-MY_NET ?= my-net
 
 default: connext-sdk-dev
 
@@ -46,7 +46,7 @@ cds.pub cds.pub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		-e NDDS_DISCOVERY_PEERS="rtps@udpv4://cds.svc:7400" \
 		--network ${MY_NET} \
-		--name=$@ \
+		--name=${MY_DOMAIN}-$@ \
 		rticom/dds-ping \
 		-reliable \
 		-durability TRANSIENT_LOCAL \
@@ -56,7 +56,7 @@ cds.sub cds.sub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		-e NDDS_DISCOVERY_PEERS="rtps@udpv4://cds.svc:7400" \
 		--network ${MY_NET} \
-		--name=$@ \
+		--name=${MY_DOMAIN}-$@ \
 		rticom/dds-ping \
 		-subscriber \
 		-domain ${MY_DOMAIN}
@@ -101,7 +101,7 @@ dsk.per.svc: ensure-network
 per.sub per.sub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		--name=$@-${MY_DOMAIN} \
+		--name=${MY_DOMAIN}-$@ \
 		rticom/dds-ping \
 		-reliable \
 		-durability TRANSIENT_LOCAL \
@@ -123,7 +123,7 @@ prf.pub.thr prf.pub.thr.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_MOUNT} \
-		--name=$@-${MY_DOMAIN} \
+		--name=${MY_DOMAIN}-$@ \
 		rticom/perftest \
 		-pub -dataLen 1024 -executionTime 60 \
 		-domain ${MY_DOMAIN}
@@ -132,7 +132,7 @@ prf.pub.lat prf.pub.lat.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_MOUNT} \
-		--name=$@-${MY_DOMAIN} \
+		--name=${MY_DOMAIN}-$@ \
 		rticom/perftest -latencyTest \
 		-pub -dataLen 1024 -executionTime 60 \
 		-domain ${MY_DOMAIN}
@@ -141,7 +141,7 @@ prf.sub prf.sub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_MOUNT} \
-		--name=$@-${MY_DOMAIN} \
+		--name=${MY_DOMAIN}-$@ \
 		rticom/perftest \
 		-sub -dataLen 1024 \
 		-domain ${MY_DOMAIN}
@@ -150,7 +150,7 @@ prf.sub prf.sub.%: ensure-network
 spy spy.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		--name=$@-${MY_DOMAIN} \
+		--name=${MY_DOMAIN}-$@ \
 		rticom/dds-spy \
 		-printSample \
 		-domain ${MY_DOMAIN}
@@ -159,7 +159,7 @@ spy spy.%: ensure-network
 pub pub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		--name=$@-${MY_DOMAIN} \
+		--name=${MY_DOMAIN}-$@ \
 		rticom/dds-ping \
 		-reliable \
 		-durability TRANSIENT_LOCAL \
@@ -168,7 +168,7 @@ pub pub.%: ensure-network
 sub sub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		--name=$@-${MY_DOMAIN} \
+		--name=${MY_DOMAIN}-$@ \
 		rticom/dds-ping -subscriber \
 		-reliable \
 		-durability TRANSIENT_LOCAL \
