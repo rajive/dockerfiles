@@ -1,6 +1,7 @@
 # Command-style targets.
 .PHONY: default FORCE ensure-network \
 	cds.svc cds.pub cds.sub \
+	col.svc \
 	rte.svc \
 	rec.svc rpl.svc mem.per.svc dsk.per.svc per.sub \
 	web.svc \
@@ -22,6 +23,9 @@ MY_NET ?= my-net
 CONNEXT_HOME := /opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}
 CONNEXT_WORKSPACE := /home/rtiuser/rti_workspace/${CONNEXT_VERSION}
 RTI_LICENSE_MOUNT := ${RTI_LICENSE_FILE}:${CONNEXT_HOME}/rti_license.dat
+
+# Collector Service currently publishes amd64 images only.
+COLLECTOR_PLATFORM := linux/amd64
 
 default: connext-sdk-dev
 
@@ -127,6 +131,15 @@ web.svc:
 		rticom/web-integration-service \
 		-cfgName shapesDemoTutorial \
 		-documentRoot ${CONNEXT_WORKSPACE}/examples/web_integration_service
+
+# Collector Service
+col.svc:
+	${CONTAINER_ENGINE} run -it --rm \
+		--platform ${COLLECTOR_PLATFORM} \
+		--network host \
+		-v ${RTI_LICENSE_MOUNT} \
+		--name=$@ \
+		rticom/collector-service
 
 # Perftest
 prf.pub.thr prf.pub.thr.%: ensure-network
