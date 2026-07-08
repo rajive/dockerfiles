@@ -13,6 +13,7 @@
 
 # User configuration: review and update these for your environment.
 CONTAINER_ENGINE ?= podman
+TZ ?= America/Los_Angeles
 MY_DOCKER_HUB_ID ?= rajive7400
 RTI_LICENSE_FILE ?= ~/rti/licenses/rti_license.dat
 CONNEXT_VERSION ?= 7.7.0
@@ -208,14 +209,13 @@ connext-sdk connext-sdk.%: ensure-network
 		-v ~/code:/home/rtiuser/code \
 		-w /home/rtiuser \
 		-u rtiuser \
+		-e TZ=${TZ} \
 		--name=$@ \
 		rticom/connext-sdk \
 		/bin/bash
 
 
-# Connext SDK Dev Container:
-#   - curl: apt install curl
-#   - neovim: https://github.com/neovim/neovim?tab=readme-ov-file#install-from-package
+# Connext SDK with Neovim:
 connext-sdk-dev connext-sdk-dev.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
@@ -225,6 +225,7 @@ connext-sdk-dev connext-sdk-dev.%: ensure-network
 		-v ~/code:/home/rtiuser/code \
 		-w /home/rtiuser \
 		-u rtiuser \
+		-e TZ=${TZ} \
 		--name=$@ \
 		${MY_DOCKER_HUB_ID}/connext-sdk-dev `# rticom/connext-sdk` \
 		/bin/bash
@@ -242,6 +243,7 @@ xubuntu:
 	  --shm-size 2g \
 	  --publish 3322:3322/tcp  \
 	  --publish 3389:3389/tcp  \
+		-e TZ=${TZ} \
 	  hectorm/xubuntu
 
 connext-tools: ensure-network
@@ -256,6 +258,7 @@ connext-tools: ensure-network
 		--shm-size 2g \
 		--publish 3322:3322/tcp  \
 		--publish 3389:3389/tcp  \
+		-e TZ=${TZ} \
 		${MY_DOCKER_HUB_ID}/connext-tools
 
 # Utilities
@@ -268,18 +271,20 @@ root.%: FORCE
 user.%: FORCE
 	${CONTAINER_ENGINE} exec -u rtiuser -it $* bash -c 'cd && exec bash'
 
-# build image
-#	make img.connext-sdk-dev
-#	make img.connext-tools
+# build image, e.g.
+#   make img.connext-sdk-dev
+#   make img.connext-tools
 img.%: FORCE
 	-${CONTAINER_ENGINE} image rm -f ${MY_DOCKER_HUB_ID}/$*
-	${CONTAINER_ENGINE} build -t ${MY_DOCKER_HUB_ID}/$* $*
+	${CONTAINER_ENGINE} build --format docker --pull \
+	-t docker.io/${MY_DOCKER_HUB_ID}/$* \
+	$*
 
-# push image
-#	make push.connext-sdk-dev
-#	make push.connext-tools
+# push image, e.g.
+#   make push.connext-sdk-dev
+#   make push.connext-tools
 push.%: FORCE
-	${CONTAINER_ENGINE} image push ${MY_DOCKER_HUB_ID}/$*
+	${CONTAINER_ENGINE} image push docker.io/${MY_DOCKER_HUB_ID}/$*
 
 
 # prune dangling comtainers and images
