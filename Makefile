@@ -266,7 +266,7 @@ root.%: FORCE
 
 # login as uid '1000' user into a container
 user.%: FORCE
-	${CONTAINER_ENGINE} exec -u 1000 -it $* bash -c 'cd && exec bash'
+	${CONTAINER_ENGINE} exec -u rtiuser -it $* bash -c 'cd && exec bash'
 
 # build image
 #	make img.connext-sdk-dev
