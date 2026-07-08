@@ -16,7 +16,7 @@ CONTAINER_ENGINE ?= podman
 MY_DOCKER_HUB_ID ?= rajive7400
 RTI_LICENSE_FILE ?= ~/rti/licenses/rti_license.dat
 CONNEXT_VERSION ?= 7.7.0
-MY_DOMAIN ?= 0
+DOMAIN ?= 0
 MY_NET ?= my-net
 
 # Internal derived paths: these are computed from the user configuration above.
@@ -51,20 +51,20 @@ cds.pub cds.pub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		-e NDDS_DISCOVERY_PEERS="rtps@udpv4://cds.svc:7400" \
 		--network ${MY_NET} \
-		--name=${MY_DOMAIN}-$@ \
+		--name=${DOMAIN}-$@ \
 		rticom/dds-ping \
 		-reliable \
 		-durability TRANSIENT_LOCAL \
-		-domain ${MY_DOMAIN}
+		-domain ${DOMAIN}
 
 cds.sub cds.sub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		-e NDDS_DISCOVERY_PEERS="rtps@udpv4://cds.svc:7400" \
 		--network ${MY_NET} \
-		--name=${MY_DOMAIN}-$@ \
+		--name=${DOMAIN}-$@ \
 		rticom/dds-ping \
 		-subscriber \
-		-domain ${MY_DOMAIN}
+		-domain ${DOMAIN}
 
 # Routing Service
 rte.svc: ensure-network
@@ -115,12 +115,12 @@ dsk.per.svc: ensure-network
 per.sub per.sub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		--name=${MY_DOMAIN}-$@ \
+		--name=${DOMAIN}-$@ \
 		rticom/dds-ping \
 		-reliable \
 		-durability TRANSIENT_LOCAL \
 		-subscriber \
-		-domain ${MY_DOMAIN}
+		-domain ${DOMAIN}
 
 # Web Integration Service
 web.svc:
@@ -146,56 +146,56 @@ prf.pub.thr prf.pub.thr.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_MOUNT} \
-		--name=${MY_DOMAIN}-$@ \
+		--name=${DOMAIN}-$@ \
 		rticom/perftest \
 		-pub -dataLen 1024 -executionTime 60 \
-		-domain ${MY_DOMAIN}
+		-domain ${DOMAIN}
 
 prf.pub.lat prf.pub.lat.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_MOUNT} \
-		--name=${MY_DOMAIN}-$@ \
+		--name=${DOMAIN}-$@ \
 		rticom/perftest -latencyTest \
 		-pub -dataLen 1024 -executionTime 60 \
-		-domain ${MY_DOMAIN}
+		-domain ${DOMAIN}
 
 prf.sub prf.sub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_MOUNT} \
-		--name=${MY_DOMAIN}-$@ \
+		--name=${DOMAIN}-$@ \
 		rticom/perftest \
 		-sub -dataLen 1024 \
-		-domain ${MY_DOMAIN}
+		-domain ${DOMAIN}
 
 # Spy
 spy spy.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		--name=${MY_DOMAIN}-$@ \
+		--name=${DOMAIN}-$@ \
 		rticom/dds-spy \
 		-printSample \
-		-domain ${MY_DOMAIN}
+		-domain ${DOMAIN}
 
 # Ping
 pub pub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		--name=${MY_DOMAIN}-$@ \
+		--name=${DOMAIN}-$@ \
 		rticom/dds-ping \
 		-reliable \
 		-durability TRANSIENT_LOCAL \
-		-domain ${MY_DOMAIN}
+		-domain ${DOMAIN}
 
 sub sub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
-		--name=${MY_DOMAIN}-$@ \
+		--name=${DOMAIN}-$@ \
 		rticom/dds-ping -subscriber \
 		-reliable \
 		-durability TRANSIENT_LOCAL \
-		-domain ${MY_DOMAIN}
+		-domain ${DOMAIN}
 
 
 # Connext SDK
