@@ -1,21 +1,31 @@
-FROM rticom/connext-sdk
-LABEL maintainer="Rajive Joshi"
+ARG CONNEXT_VERSION=7.7.0
+
+FROM rticom/connext-sdk:${CONNEXT_VERSION}
+
+LABEL org.opencontainers.image.authors="Rajive Joshi" \
+  org.opencontainers.image.title="connext-sdk-dev" \
+  org.opencontainers.image.description="RTI Connext SDK Development"
 
 USER root
 
-# neovim
-RUN apt update && \
-  apt install -y curl nodejs npm && \
-  rm -rf /var/lib/apt/lists/*; \
-  curl -sL https://github.com/neovim/neovim/releases/latest/download/nvim-linux64.tar.gz | tar -xzC /opt 2>&1
+# dev utils
+RUN apt-get update && \
+  apt-get install -y --no-install-recommends \
+  curl \
+  wget \
+  unzip \
+  fonts-jetbrains-mono \
+  kitty-terminfo \
+  imagemagick \
+  libmagickwand-dev \
+  plantuml \
+  clangd \
+  && \
+  rm -rf /var/lib/apt/lists/*
 
-ENV PATH=/opt/nvim-linux64/bin:$PATH
-
-
-# RTI Connext
-RUN ln -s $NDDSHOME /opt/rti.com/NDDSHOME
+RUN update-ca-certificates
 
 USER rtiuser
 WORKDIR /home/rtiuser
 
-ENTRYPOINT ["/opt/rti.com/NDDSHOME/bin/rtientrypoint"]
+ENTRYPOINT ["rtientrypoint"]
