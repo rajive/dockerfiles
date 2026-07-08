@@ -1,3 +1,4 @@
+# Command-style targets.
 .PHONY: default FORCE ensure-network \
 	cds.svc cds.pub cds.sub \
 	rec.svc rpl.svc mem.per.svc dsk.per.svc per.sub \
@@ -8,15 +9,15 @@
 	xubuntu connext-tools \
 	prune prune_all
 
+# User configuration: review and update these for your environment.
 CONTAINER_ENGINE ?= podman
 MY_DOCKER_HUB_ID ?= rajive7400
-
-CONNEXT_VERSION ?= 7.7.0
 RTI_LICENSE_FILE ?= ~/rti/licenses/rti_license.dat
-
+CONNEXT_VERSION ?= 7.7.0
 MY_DOMAIN ?= 0
 MY_NET ?= my-net
 
+# Internal derived paths: these are computed from the user configuration above.
 CONNEXT_HOME := /opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}
 CONNEXT_WORKSPACE := /home/rtiuser/rti_workspace/${CONNEXT_VERSION}
 RTI_LICENSE_MOUNT := ${RTI_LICENSE_FILE}:${CONNEXT_HOME}/rti_license.dat
@@ -25,14 +26,14 @@ default: connext-sdk-dev
 
 FORCE:
 
-# -- My Network (bridge) ---
+# Network setup
 # Ensure the named bridge network exists before starting containers on it.
 ensure-network:
 	@test -n "${MY_NET}" || { echo "MY_NET must not be empty"; exit 1; }
 	@${CONTAINER_ENGINE} network inspect ${MY_NET} >/dev/null 2>&1 || \
 		${CONTAINER_ENGINE} network create -d bridge ${MY_NET}
 
-# --- Cloud Discovery Service ---
+# Cloud Discovery Service
 # must be the first container on the network
 cds.svc: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
@@ -61,7 +62,7 @@ cds.sub cds.sub.%: ensure-network
 		-subscriber \
 		-domain ${MY_DOMAIN}
 
-# --- Record and Replay ---
+# Record and Replay
 rec.svc: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
@@ -80,7 +81,7 @@ rpl.svc: ensure-network
 		rticom/replay-service \
 		-cfgName default
 
-# --- Persistence Service --- (fails)
+# Persistence Service (fails)
 mem.per.svc: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
@@ -108,7 +109,7 @@ per.sub per.sub.%: ensure-network
 		-subscriber \
 		-domain ${MY_DOMAIN}
 
-# --- Web Integration Service ---
+# Web Integration Service
 web.svc:
 	${CONTAINER_ENGINE} run -it --rm \
 		--network host \
@@ -118,7 +119,7 @@ web.svc:
 		-cfgName shapesDemoTutorial \
 		-documentRoot ${CONNEXT_WORKSPACE}/examples/web_integration_service
 
-# --- Perftest ---
+# Perftest
 prf.pub.thr prf.pub.thr.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
@@ -146,7 +147,7 @@ prf.sub prf.sub.%: ensure-network
 		-sub -dataLen 1024 \
 		-domain ${MY_DOMAIN}
 
-# --- Spy ---
+# Spy
 spy spy.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
@@ -155,7 +156,7 @@ spy spy.%: ensure-network
 		-printSample \
 		-domain ${MY_DOMAIN}
 
-# --- Ping ---
+# Ping
 pub pub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
@@ -175,7 +176,7 @@ sub sub.%: ensure-network
 		-domain ${MY_DOMAIN}
 
 
-# --- Connext SDK ---
+# Connext SDK
 # Dev container requires:
 #   - curl: apt install curl
 #   - neovim: https://github.com/neovim/neovim?tab=readme-ov-file#install-from-package
@@ -193,7 +194,7 @@ connext-sdk-dev connext-sdk-dev.%: ensure-network
 		${MY_DOCKER_HUB_ID}/connext-sdk-dev `# rticom/connext-sdk` \
 		/bin/bash
 
-# --- Remote Desktop (GUI) ---
+# Remote Desktop (GUI)
 
 # xrdp (Microsoft Remote Desktop) to localhost:3389
 # ssh -p 3322 user@localhost
@@ -222,7 +223,7 @@ connext-tools: ensure-network
 		--publish 3389:3389/tcp  \
 		${MY_DOCKER_HUB_ID}/connext-tools
 
-# -- Utils ---
+# Utilities
 
 # login as 'root' user into a container
 root.%: FORCE
