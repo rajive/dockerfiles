@@ -199,10 +199,23 @@ sub sub.%: ensure-network
 
 
 # Connext SDK
-# Dev container requires:
+connext-sdk connext-sdk.%: ensure-network
+	${CONTAINER_ENGINE} run -it --rm \
+		--network ${MY_NET} \
+		-v ${RTI_LICENSE_MOUNT}:ro \
+		-v home:/home \
+		-v ~/.config/nvim:/home/rtiuser/.config/nvim:ro \
+		-v ~/code:/home/rtiuser/code \
+		-w /home/rtiuser \
+		-u rtiuser \
+		--name=$@ \
+		rticom/connext-sdk \
+		/bin/bash
+
+
+# Connext SDK Dev Container:
 #   - curl: apt install curl
 #   - neovim: https://github.com/neovim/neovim?tab=readme-ov-file#install-from-package
-
 connext-sdk-dev connext-sdk-dev.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
