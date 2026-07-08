@@ -1,6 +1,7 @@
 # Command-style targets.
 .PHONY: default FORCE ensure-network \
 	cds.svc cds.pub cds.sub \
+	rte.svc \
 	rec.svc rpl.svc mem.per.svc dsk.per.svc per.sub \
 	web.svc \
 	prf.pub.thr prf.pub.lat prf.sub \
@@ -42,7 +43,6 @@ cds.svc: ensure-network
 		--name=$@ \
 		rticom/cloud-discovery-service \
 		-cfgName defaultWAN
-
 cds.pub cds.pub.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		-e NDDS_DISCOVERY_PEERS="rtps@udpv4://cds.svc:7400" \
@@ -61,6 +61,15 @@ cds.sub cds.sub.%: ensure-network
 		rticom/dds-ping \
 		-subscriber \
 		-domain ${MY_DOMAIN}
+
+# Routing Service
+rte.svc: ensure-network
+	${CONTAINER_ENGINE} run -it --rm \
+		--network ${MY_NET} \
+		-v ${RTI_LICENSE_MOUNT} \
+		--name=$@ \
+		rticom/routing-service \
+		-cfgName DomainBridgingLAN
 
 # Record and Replay
 rec.svc: ensure-network
