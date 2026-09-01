@@ -204,12 +204,28 @@ connext-sdk connext-sdk.%: ensure-network
 	${CONTAINER_ENGINE} run -it --rm \
 		--network ${MY_NET} \
 		-v ${RTI_LICENSE_MOUNT}:ro \
-		-v home:/home \
-		-v ~/.config/nvim:/home/rtiuser/.config/nvim \
-		-v ~/code:/home/rtiuser/code \
-		-w /home/rtiuser \
-		-u rtiuser \
-		-e TZ=${TZ} \
+		-v home:${HOME}:z,U \
+		-v ~/.bashrc:${HOME}/.bashrc:ro \
+		-v ~/.clangd:${HOME}/.clangd:ro \
+		-v ~/.gitconfig:${HOME}/.gitconfig:ro \
+		-v ~/.gitignore_global:${HOME}/.gitignore_global:ro \
+		-v ~/.config:${HOME}/.config \
+		-v ~/.scripts:${HOME}/.scripts:ro \
+		-v ~/tools:${HOME}/tools:ro \
+		-v ~/.mozilla/firefox \
+		-v ~/.cache/mozilla \
+		-v ~/snap/firefox/common \
+		-v ${PWD}:/workspace \
+		-w /workspace \
+  	-u $(shell id -u):$(shell id -g) \
+  	-e USER=$(shell id -un) \
+  	-e LOGNAME=$(shell id -un) \
+    -e HOME=${HOME} \
+	  -e TERM=${TERM} \
+    -e SSH_TTY=/dev/tty \
+	  -e TZ=${TZ} \
+		--userns=keep-id \
+		--passwd-entry="$(shell id -un):x:$(shell id -u):$(shell id -g):${USER}:${HOME}:/bin/bash" \
 		--name=$@ \
 		rticom/connext-sdk \
 		/bin/bash
@@ -254,6 +270,11 @@ connext-sdk-dev connext-sdk-dev.%: ensure-network
 # https://github.com/hectorm/docker-xubuntu
 xubuntu:
 	${CONTAINER_ENGINE} run -d --rm \
+		-v ~/.mozilla/firefox \
+		-v ~/.cache/mozilla \
+		-v ~/snap/firefox/common \
+		-v ${PWD}:/workspace \
+		-w /workspace \
 	  --name $@ \
 	  --shm-size 2g \
 	  --publish 3322:3322/tcp  \
@@ -264,16 +285,25 @@ xubuntu:
 connext-tools: ensure-network
 	${CONTAINER_ENGINE} run -d --rm \
 		--network ${MY_NET} \
-		-v ${RTI_LICENSE_MOUNT} \
-		-v home:/home \
-		-v ~/.config/nvim:/home/user/.config/nvim \
-		-v ~/code:/home/user/code:ro \
-		-w /home/user \
+		-v ${RTI_LICENSE_MOUNT}:ro \
+		-v home:${HOME}:z,U \
+		-v ~/.bashrc:${HOME}/.bashrc:ro \
+		-v ~/.clangd:${HOME}/.clangd:ro \
+		-v ~/.gitconfig:${HOME}/.gitconfig:ro \
+		-v ~/.gitignore_global:${HOME}/.gitignore_global:ro \
+		-v ~/.config:${HOME}/.config \
+		-v ~/.scripts:${HOME}/.scripts:ro \
+		-v ~/tools:${HOME}/tools:ro \
+		-v ~/.mozilla/firefox \
+		-v ~/.cache/mozilla \
+		-v ~/snap/firefox/common \
+		-v ${PWD}:/workspace \
+		-w /workspace \
+	  -e TZ=${TZ} \
 		--name $@ \
 		--shm-size 2g \
 		--publish 3322:3322/tcp  \
 		--publish 3389:3389/tcp  \
-		-e TZ=${TZ} \
 		${MY_DOCKER_HUB_ID}/connext-tools
 
 # Utilities
@@ -291,7 +321,9 @@ user.%: FORCE
 #   make img.connext-tools
 img.%: FORCE
 	-${CONTAINER_ENGINE} image rm -f ${MY_DOCKER_HUB_ID}/$*
-	${CONTAINER_ENGINE} build --format docker --pull \
+	${CONTAINER_ENGINE} build --format docker \
+	--build-arg CONNEXT_VERSION=${CONNEXT_VERSION} \
+	--pull \
 	-t docker.io/${MY_DOCKER_HUB_ID}/$* \
 	$*
 
