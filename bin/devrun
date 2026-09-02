@@ -10,6 +10,14 @@ local function getenv(name, fallback)
   return value
 end
 
+local function getenv_integer(name, fallback)
+  local value = getenv(name, tostring(fallback))
+  if value:match("^%d+$") then
+    return tonumber(value)
+  end
+  return value
+end
+
 devrun.config = {
   engine = nil,
   defaults = {
@@ -18,8 +26,8 @@ devrun.config = {
     license_file = getenv("RTI_LICENSE_FILE", getenv("HOME", "") .. "/rti/licenses/rti_license.dat"),
     timezone = getenv("TZ", "America/Los_Angeles"),
     home_volume = "devrun",
-    ssh_port = tonumber(getenv("DEVRUN_SSH_PORT", "3322")),
-    rdp_port = tonumber(getenv("DEVRUN_RDP_PORT", "3389")),
+    ssh_port = getenv_integer("DEVRUN_SSH_PORT", 3322),
+    rdp_port = getenv_integer("DEVRUN_RDP_PORT", 3389),
   },
   default_profiles = { "dev" },
   profiles = {
@@ -288,11 +296,33 @@ local function append(arguments, ...)
   end
 end
 
+local function validate_port(value, description)
+  if type(value) ~= "number" or value % 1 ~= 0 or value < 1 or value > 65535 then
+    fail(description .. " must be an integer in 1..65535 (got " .. tostring(value) .. ")", 2)
+  end
+end
+
+function devrun.validate_launch(launch)
+  for index, port in ipairs(launch.ports or {}) do
+    if type(port) ~= "table" then
+      fail("port " .. index .. " must be a table", 1)
+    end
+    validate_port(port.host, "port " .. index .. " host port")
+    validate_port(port.container, "port " .. index .. " container port")
+    if port.protocol ~= "tcp" and port.protocol ~= "udp" then
+      fail("port " .. index .. " protocol must be tcp or udp (got "
+        .. tostring(port.protocol) .. ")", 1)
+    end
+  end
+  return launch
+end
+
 function devrun.build_command(options, launch, context)
   local engine = options.engine or context.engine or launch.engine
   if not engine then
     fail("container engine has not been selected", 1)
   end
+  devrun.validate_launch(launch)
 
   local arguments = { engine, "run" }
   if launch.remove then append(arguments, "--rm") end
@@ -317,6 +347,11 @@ function devrun.build_command(options, launch, context)
 
   if launch.workdir then append(arguments, "-w", launch.workdir) end
   if launch.network then append(arguments, "--network", launch.network) end
+  if launch.shm_size then append(arguments, "--shm-size", launch.shm_size) end
+  for _, port in ipairs(launch.ports or {}) do
+    append(arguments, "--publish",
+      port.host .. ":" .. port.container .. "/" .. port.protocol)
+  end
   for _, mount in ipairs(launch.mounts or {}) do
     local specification = mount.source .. ":" .. mount.target
     if mount.readonly then specification = specification .. ":ro" end
@@ -375,6 +410,18 @@ end
 
 function devrun.execute(arguments, execute)
   return process_status(execute(devrun.render_command(arguments)))
+end
+
+local function print_detached_details(stdout, name, launch)
+  local details = { "Container: " .. name }
+  for _, port in ipairs(launch.ports or {}) do
+    if port.container == 3322 and port.protocol == "tcp" then
+      details[#details + 1] = "SSH: localhost:" .. port.host
+    elseif port.container == 3389 and port.protocol == "tcp" then
+      details[#details + 1] = "RDP: localhost:" .. port.host
+    end
+  end
+  stdout(table.concat(details, "\n") .. "\n")
 end
 
 local function capture_command(arguments)
@@ -523,7 +570,11 @@ function devrun.run(arguments, dependencies)
       return 1
     end
   end
-  return devrun.execute(command, execute)
+  local status = devrun.execute(command, execute)
+  if status == 0 and launch.detached then
+    print_detached_details(stdout, name, launch)
+  end
+  return status
 end
 
 if not _G.DEVRUN_TESTING then

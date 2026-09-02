@@ -45,6 +45,13 @@ local function joined(values)
   return table.concat(values, "")
 end
 
+local function index_of(values, expected)
+  for index, value in ipairs(values) do
+    if value == expected then return index end
+  end
+  return nil
+end
+
 local function fake_context(engine)
   return {
     cwd = "/tmp/My Project",
@@ -253,6 +260,214 @@ test("identity rendering keeps Podman flags out of Docker", function()
   contains(docker, "1001:1002")
   not_contains(docker, "--userns=keep-id")
   not_contains(docker, "--passwd-entry")
+end)
+
+test("GUI rendering is portable and preserves the image default command", function()
+  for _, engine in ipairs({ "docker", "podman" }) do
+    local image = "hectorm/xubuntu:latest"
+    local options = devrun.parse_args({ image, "--engine", engine, "--dry-run" })
+    local context = fake_context(engine)
+    local launch = devrun.resolve_launch(options, devrun.config, context)
+    local command = devrun.build_command(options, launch, context)
+
+    contains(command, "--rm")
+    contains(command, "-d")
+    not_contains(command, "-it")
+    local shm = assert(index_of(command, "--shm-size"), "missing --shm-size")
+    equal(command[shm + 1], "2g")
+    contains(command, "3322:3322/tcp")
+    contains(command, "3389:3389/tcp")
+    equal(command[#command], image, "GUI command must end at image")
+  end
+end)
+
+test("connext-tools composes GUI and Connext behavior", function()
+  local options = devrun.parse_args({
+    "docker.io/rajive7400/connext-tools:7.7.0", "--engine", "podman", "--dry-run",
+  })
+  local context = fake_context("podman")
+  local launch = devrun.resolve_launch(options, devrun.config, context)
+  local command = devrun.build_command(options, launch, context)
+
+  list_equal(launch.profiles, { "gui", "connext" })
+  equal(launch.detached, true)
+  equal(launch.ensure_network, devrun.config.defaults.network)
+  contains(command, "--network")
+  contains(command, devrun.config.defaults.network)
+  equal(#launch.optional_mounts, 1)
+end)
+
+test("xubuntu selects only GUI behavior without Connext or browser mounts", function()
+  local options = devrun.parse_args({
+    "hectorm/xubuntu:latest", "--engine", "docker", "--dry-run",
+  })
+  local context = fake_context("docker")
+  local launch = devrun.resolve_launch(options, devrun.config, context)
+  local command = devrun.build_command(options, launch, context)
+
+  list_equal(launch.profiles, { "gui" })
+  equal(launch.ensure_network, nil)
+  equal(launch.network, nil)
+  equal(launch.optional_mounts, nil)
+  not_contains(command, "--network")
+  for _, value in ipairs(command) do
+    assert(not value:match("mozilla"), value)
+    assert(not value:match("firefox"), value)
+    assert(not value:match("snap"), value)
+  end
+end)
+
+test("explicit GUI profile replaces automatic Connext mapping", function()
+  local options = devrun.parse_args({
+    "docker.io/rajive7400/connext-tools:7.7.0", "-p", "gui",
+    "--engine", "docker", "--dry-run",
+  })
+  local context = fake_context("docker")
+  local launch = devrun.resolve_launch(options, devrun.config, context)
+  local command = devrun.build_command(options, launch, context)
+
+  list_equal(launch.profiles, { "gui" })
+  equal(launch.ensure_network, nil)
+  not_contains(command, "--network")
+end)
+
+test("GUI uses configured SSH and RDP host ports", function()
+  local old_ssh = devrun.config.defaults.ssh_port
+  local old_rdp = devrun.config.defaults.rdp_port
+  devrun.config.defaults.ssh_port = 22022
+  devrun.config.defaults.rdp_port = 23389
+
+  local options = devrun.parse_args({
+    "hectorm/xubuntu:latest", "--engine", "docker", "--dry-run",
+  })
+  local context = fake_context("docker")
+  local launch = devrun.resolve_launch(options, devrun.config, context)
+  local command = devrun.build_command(options, launch, context)
+  devrun.config.defaults.ssh_port = old_ssh
+  devrun.config.defaults.rdp_port = old_rdp
+
+  contains(command, "22022:3322/tcp")
+  contains(command, "23389:3389/tcp")
+end)
+
+test("GUI environment-backed port defaults retain valid integers", function()
+  local function expected(name, fallback)
+    local value = os.getenv(name)
+    if value == nil or value == "" then return fallback end
+    if value:match("^%d+$") then return tonumber(value) end
+    return value
+  end
+
+  equal(devrun.config.defaults.ssh_port, expected("DEVRUN_SSH_PORT", 3322))
+  equal(devrun.config.defaults.rdp_port, expected("DEVRUN_RDP_PORT", 3389))
+end)
+
+test("GUI rejects invalid port configuration", function()
+  local invalid = {
+    { field = "host", value = "not-a-port", message = "host port" },
+    { field = "host", value = 22.5, message = "host port" },
+    { field = "host", value = 0, message = "host port" },
+    { field = "host", value = 65536, message = "host port" },
+    { field = "container", value = "3322", message = "container port" },
+  }
+  for _, case in ipairs(invalid) do
+    local port = { host = 3322, container = 3322, protocol = "tcp" }
+    port[case.field] = case.value
+    local ok, err = pcall(devrun.validate_launch, { ports = { port } })
+    equal(ok, false)
+    assert(tostring(err):match(case.message), tostring(err))
+    assert(tostring(err):match("integer in 1%.%.65535"), tostring(err))
+  end
+end)
+
+test("GUI accepts tcp and udp and rejects invalid protocols", function()
+  devrun.validate_launch({
+    ports = {
+      { host = 1001, container = 1002, protocol = "tcp" },
+      { host = 1003, container = 1004, protocol = "udp" },
+    },
+  })
+  local ok, err = pcall(devrun.validate_launch, {
+    ports = { { host = 1001, container = 1002, protocol = "icmp" } },
+  })
+  equal(ok, false)
+  assert(tostring(err):match("protocol must be tcp or udp"), tostring(err))
+end)
+
+test("GUI port rendering keeps metacharacters inert by rejecting them", function()
+  local ok, err = pcall(devrun.build_command,
+    { image = "image", engine = "docker" },
+    { ports = { { host = "3322;$(false)", container = 3322, protocol = "tcp" } } },
+    fake_context("docker"))
+  equal(ok, false)
+  assert(tostring(err):match("host port"), tostring(err))
+end)
+
+test("invalid GUI configuration fails before dry-run or execution", function()
+  local old_ssh = devrun.config.defaults.ssh_port
+  devrun.config.defaults.ssh_port = "bad"
+  local output = {}
+  local errors = {}
+  local side_effects = 0
+  local status = devrun.run({
+    "hectorm/xubuntu:latest", "--engine", "docker", "--dry-run",
+  }, {
+    cwd = "/tmp/project",
+    stdout = function(value) output[#output + 1] = value end,
+    stderr = function(value) errors[#errors + 1] = value end,
+    execute = function() side_effects = side_effects + 1 end,
+  })
+  devrun.config.defaults.ssh_port = old_ssh
+
+  equal(status, 2)
+  equal(joined(output), "")
+  equal(side_effects, 0)
+  assert(joined(errors):match("host port must be an integer in 1%.%.65535"), joined(errors))
+end)
+
+test("successful detached launch prints connection details", function()
+  local output = {}
+  local commands = {}
+  local status = devrun.run({
+    "hectorm/xubuntu:latest", "--engine", "docker", "--name", "desktop",
+  }, {
+    cwd = "/tmp/project",
+    path_exists = function() return false end,
+    stdout = function(value) output[#output + 1] = value end,
+    stderr = function() end,
+    execute = function(command)
+      commands[#commands + 1] = command
+      if #commands == 1 then return nil, "exit", 1 end
+      return true, "exit", 0
+    end,
+  })
+
+  equal(status, 0)
+  local rendered = joined(output)
+  assert(rendered:match("Container: desktop"), rendered)
+  assert(rendered:match("SSH: localhost:" .. devrun.config.defaults.ssh_port), rendered)
+  assert(rendered:match("RDP: localhost:" .. devrun.config.defaults.rdp_port), rendered)
+end)
+
+test("failed detached launch prints no connection details", function()
+  local output = {}
+  local commands = {}
+  local status = devrun.run({
+    "hectorm/xubuntu:latest", "--engine", "podman", "--name", "desktop",
+  }, {
+    cwd = "/tmp/project",
+    path_exists = function() return false end,
+    stdout = function(value) output[#output + 1] = value end,
+    stderr = function() end,
+    execute = function(command)
+      commands[#commands + 1] = command
+      if #commands == 1 then return nil, "exit", 1 end
+      return nil, "exit", 125
+    end,
+  })
+
+  equal(status, 125)
+  equal(joined(output), "")
 end)
 
 test("run executes quoted command and propagates engine status", function()

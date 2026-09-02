@@ -3,7 +3,7 @@
 ## Status
 
 Accepted. Implementation is in progress; the core CLI, runnable development,
-identity, and Connext runtime slices are implemented.
+identity, Connext runtime, and GUI runtime slices are implemented.
 
 ## Problem
 
