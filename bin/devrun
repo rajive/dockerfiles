@@ -77,7 +77,12 @@ devrun.config = {
       return {
         detached = true,
         remove = true,
+        mounts = {
+          { source = ctx.cwd, target = "/workspace" },
+        },
+        workdir = "/workspace",
         shm_size = "2g",
+        env = { TZ = ctx.config.defaults.timezone },
         ports = {
           { host = ctx.config.defaults.ssh_port, container = 3322, protocol = "tcp" },
           { host = ctx.config.defaults.rdp_port, container = 3389, protocol = "tcp" },
@@ -86,6 +91,11 @@ devrun.config = {
     end,
   },
   images = {
+    {
+      pattern = "^docker%.io/rticom/connext%-sdk:",
+      profiles = { "dev", "identity", "connext" },
+      overrides = { container_user = "rtiuser", container_home = "/home/rtiuser" },
+    },
     {
       pattern = "^rticom/connext%-sdk:",
       profiles = { "dev", "identity", "connext" },
@@ -100,6 +110,11 @@ devrun.config = {
       pattern = "connext%-tools:",
       profiles = { "gui", "connext" },
       overrides = { container_home = "/home/user" },
+    },
+    {
+      pattern = "^docker%.io/hectorm/xubuntu:",
+      profiles = { "gui" },
+      overrides = {},
     },
     {
       pattern = "^hectorm/xubuntu:",

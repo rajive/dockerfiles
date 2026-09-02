@@ -3,7 +3,8 @@
 ## Status
 
 Accepted. Implementation is in progress; the core CLI, runnable development,
-identity, Connext runtime, and GUI runtime slices are implemented.
+identity, Connext runtime, GUI runtime, and Make migration slices are
+implemented.
 
 ## Problem
 
@@ -235,6 +236,8 @@ It:
 - Runs detached and returns after startup.
 - Removes the container when it is stopped.
 - Uses the image's default command.
+- Mounts the invocation directory at `/workspace` and uses it as the working
+  directory.
 - Configures a shared memory size of `2g` by default.
 - Publishes configurable SSH and RDP host ports to container ports 3322 and
   3389.
@@ -356,22 +359,22 @@ It does not duplicate profile selection or runtime policy.
 The four overlapping targets become thin calls similar to:
 
 ```make
-CONNEXT_SDK_IMAGE ?= rticom/connext-sdk:${CONNEXT_VERSION}
-CONNEXT_SDK_DEV_IMAGE ?= ${MY_DOCKER_HUB_ID}/connext-sdk-dev:${CONNEXT_VERSION}
-CONNEXT_TOOLS_IMAGE ?= ${MY_DOCKER_HUB_ID}/connext-tools:${CONNEXT_VERSION}
-XUBUNTU_IMAGE ?= hectorm/xubuntu:latest
+CONNEXT_SDK_IMAGE ?= docker.io/rticom/connext-sdk:${CONNEXT_VERSION}
+CONNEXT_SDK_DEV_IMAGE ?= docker.io/${MY_DOCKER_HUB_ID}/connext-sdk-dev:${CONNEXT_VERSION}
+CONNEXT_TOOLS_IMAGE ?= docker.io/${MY_DOCKER_HUB_ID}/connext-tools:${CONNEXT_VERSION}
+XUBUNTU_IMAGE ?= docker.io/hectorm/xubuntu:latest
 
 connext-sdk:
-	./bin/devrun ${CONNEXT_SDK_IMAGE}
+	./bin/devrun ${CONNEXT_SDK_IMAGE} --engine ${CONTAINER_ENGINE} --name "$@"
 
 connext-sdk-dev:
-	./bin/devrun ${CONNEXT_SDK_DEV_IMAGE}
+	./bin/devrun ${CONNEXT_SDK_DEV_IMAGE} --engine ${CONTAINER_ENGINE} --name "$@"
 
 connext-tools:
-	./bin/devrun ${CONNEXT_TOOLS_IMAGE}
+	./bin/devrun ${CONNEXT_TOOLS_IMAGE} --engine ${CONTAINER_ENGINE} --name "$@"
 
 xubuntu:
-	./bin/devrun ${XUBUNTU_IMAGE}
+	./bin/devrun ${XUBUNTU_IMAGE} --engine ${CONTAINER_ENGINE} --name "$@"
 ```
 
 Existing pattern targets such as `connext-sdk-dev.foo` are preserved and pass

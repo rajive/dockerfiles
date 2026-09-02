@@ -20,10 +20,17 @@ CONNEXT_VERSION ?= 7.7.0
 DOMAIN ?= 0
 MY_NET ?= my-net
 
+# Images launched by the development aliases and produced by img.%.
+CONNEXT_SDK_IMAGE ?= docker.io/rticom/connext-sdk:${CONNEXT_VERSION}
+CONNEXT_SDK_DEV_IMAGE ?= docker.io/${MY_DOCKER_HUB_ID}/connext-sdk-dev:${CONNEXT_VERSION}
+CONNEXT_TOOLS_IMAGE ?= docker.io/${MY_DOCKER_HUB_ID}/connext-tools:${CONNEXT_VERSION}
+XUBUNTU_IMAGE ?= docker.io/hectorm/xubuntu:latest
+
 # Internal derived paths: these are computed from the user configuration above.
 CONNEXT_HOME := /opt/rti.com/rti_connext_dds-${CONNEXT_VERSION}
 CONNEXT_WORKSPACE := /home/rtiuser/rti_workspace/${CONNEXT_VERSION}
 RTI_LICENSE_MOUNT := ${RTI_LICENSE_FILE}:${CONNEXT_HOME}/rti_license.dat
+DEVRUN_RTI_LICENSE_FILE := $(patsubst ~%,${HOME}%,$(RTI_LICENSE_FILE))
 
 # Collector Service currently publishes amd64 images only.
 COLLECTOR_PLATFORM := linux/amd64
@@ -200,66 +207,16 @@ sub sub.%: ensure-network
 
 
 # Connext SDK
-connext-sdk connext-sdk.%: ensure-network
-	${CONTAINER_ENGINE} run -it --rm \
-		--network ${MY_NET} \
-		-v ${RTI_LICENSE_MOUNT}:ro \
-		-v home:${HOME}:z,U \
-		-v ~/.bashrc:${HOME}/.bashrc:ro \
-		-v ~/.clangd:${HOME}/.clangd:ro \
-		-v ~/.gitconfig:${HOME}/.gitconfig:ro \
-		-v ~/.gitignore_global:${HOME}/.gitignore_global:ro \
-		-v ~/.config:${HOME}/.config \
-		-v ~/.scripts:${HOME}/.scripts:ro \
-		-v ~/tools:${HOME}/tools:ro \
-		-v ~/.mozilla/firefox \
-		-v ~/.cache/mozilla \
-		-v ~/snap/firefox/common \
-		-v ${PWD}:/workspace \
-		-w /workspace \
-  	-u $(shell id -u):$(shell id -g) \
-  	-e USER=$(shell id -un) \
-  	-e LOGNAME=$(shell id -un) \
-    -e HOME=${HOME} \
-	  -e TERM=${TERM} \
-    -e SSH_TTY=/dev/tty \
-	  -e TZ=${TZ} \
-		--userns=keep-id \
-		--passwd-entry="$(shell id -un):x:$(shell id -u):$(shell id -g):${USER}:${HOME}:/bin/bash" \
-		--name=$@ \
-		rticom/connext-sdk \
-		/bin/bash
+connext-sdk connext-sdk.%:
+	CONNEXT_VERSION="${CONNEXT_VERSION}" MY_NET="${MY_NET}" \
+	RTI_LICENSE_FILE="${DEVRUN_RTI_LICENSE_FILE}" TZ="${TZ}" \
+	./bin/devrun "${CONNEXT_SDK_IMAGE}" --engine "${CONTAINER_ENGINE}" --name "$@"
 
 # Connext SDK with Dev Env and Tools:
-connext-sdk-dev connext-sdk-dev.%: ensure-network
-	${CONTAINER_ENGINE} run -it --rm \
-		--network ${MY_NET} \
-		-v ${RTI_LICENSE_MOUNT}:ro \
-		-v home:${HOME}:z,U \
-		-v ~/.bashrc:${HOME}/.bashrc:ro \
-		-v ~/.clangd:${HOME}/.clangd:ro \
-		-v ~/.gitconfig:${HOME}/.gitconfig:ro \
-		-v ~/.gitignore_global:${HOME}/.gitignore_global:ro \
-		-v ~/.config:${HOME}/.config \
-		-v ~/.scripts:${HOME}/.scripts:ro \
-		-v ~/tools:${HOME}/tools:ro \
-		-v ~/.mozilla/firefox \
-		-v ~/.cache/mozilla \
-		-v ~/snap/firefox/common \
-		-v ${PWD}:/workspace \
-		-w /workspace \
-  	-u $(shell id -u):$(shell id -g) \
-  	-e USER=$(shell id -un) \
-  	-e LOGNAME=$(shell id -un) \
-    -e HOME=${HOME} \
-	  -e TERM=${TERM} \
-    -e SSH_TTY=/dev/tty \
-	  -e TZ=${TZ} \
-		--userns=keep-id \
-		--passwd-entry="$(shell id -un):x:$(shell id -u):$(shell id -g):${USER}:${HOME}:/bin/bash" \
-		--name=$@ \
-		${MY_DOCKER_HUB_ID}/connext-sdk-dev \
-		/bin/bash
+connext-sdk-dev connext-sdk-dev.%:
+	CONNEXT_VERSION="${CONNEXT_VERSION}" MY_NET="${MY_NET}" \
+	RTI_LICENSE_FILE="${DEVRUN_RTI_LICENSE_FILE}" TZ="${TZ}" \
+	./bin/devrun "${CONNEXT_SDK_DEV_IMAGE}" --engine "${CONTAINER_ENGINE}" --name "$@"
 
 # Remote Desktop (GUI)
 
@@ -269,42 +226,13 @@ connext-sdk-dev connext-sdk-dev.%: ensure-network
 #          --device /dev/dri:/dev/dri \
 # https://github.com/hectorm/docker-xubuntu
 xubuntu:
-	${CONTAINER_ENGINE} run -d --rm \
-		-v ~/.mozilla/firefox \
-		-v ~/.cache/mozilla \
-		-v ~/snap/firefox/common \
-		-v ${PWD}:/workspace \
-		-w /workspace \
-	  --name $@ \
-	  --shm-size 2g \
-	  --publish 3322:3322/tcp  \
-	  --publish 3389:3389/tcp  \
-		-e TZ=${TZ} \
-	  hectorm/xubuntu
+	TZ="${TZ}" ./bin/devrun "${XUBUNTU_IMAGE}" \
+		--engine "${CONTAINER_ENGINE}" --name "$@"
 
-connext-tools: ensure-network
-	${CONTAINER_ENGINE} run -d --rm \
-		--network ${MY_NET} \
-		-v ${RTI_LICENSE_MOUNT}:ro \
-		-v home:${HOME}:z,U \
-		-v ~/.bashrc:${HOME}/.bashrc:ro \
-		-v ~/.clangd:${HOME}/.clangd:ro \
-		-v ~/.gitconfig:${HOME}/.gitconfig:ro \
-		-v ~/.gitignore_global:${HOME}/.gitignore_global:ro \
-		-v ~/.config:${HOME}/.config \
-		-v ~/.scripts:${HOME}/.scripts:ro \
-		-v ~/tools:${HOME}/tools:ro \
-		-v ~/.mozilla/firefox \
-		-v ~/.cache/mozilla \
-		-v ~/snap/firefox/common \
-		-v ${PWD}:/workspace \
-		-w /workspace \
-	  -e TZ=${TZ} \
-		--name $@ \
-		--shm-size 2g \
-		--publish 3322:3322/tcp  \
-		--publish 3389:3389/tcp  \
-		${MY_DOCKER_HUB_ID}/connext-tools
+connext-tools:
+	CONNEXT_VERSION="${CONNEXT_VERSION}" MY_NET="${MY_NET}" \
+	RTI_LICENSE_FILE="${DEVRUN_RTI_LICENSE_FILE}" TZ="${TZ}" \
+	./bin/devrun "${CONNEXT_TOOLS_IMAGE}" --engine "${CONTAINER_ENGINE}" --name "$@"
 
 # Utilities
 
@@ -320,18 +248,18 @@ user.%: FORCE
 #   make img.connext-sdk-dev
 #   make img.connext-tools
 img.%: FORCE
-	-${CONTAINER_ENGINE} image rm -f ${MY_DOCKER_HUB_ID}/$*
+	-${CONTAINER_ENGINE} image rm -f docker.io/${MY_DOCKER_HUB_ID}/$*:${CONNEXT_VERSION}
 	${CONTAINER_ENGINE} build --format docker \
 	--build-arg CONNEXT_VERSION=${CONNEXT_VERSION} \
 	--pull \
-	-t docker.io/${MY_DOCKER_HUB_ID}/$* \
+	-t docker.io/${MY_DOCKER_HUB_ID}/$*:${CONNEXT_VERSION} \
 	$*
 
 # push image, e.g.
 #   make push.connext-sdk-dev
 #   make push.connext-tools
 push.%: FORCE
-	${CONTAINER_ENGINE} image push docker.io/${MY_DOCKER_HUB_ID}/$*
+	${CONTAINER_ENGINE} image push docker.io/${MY_DOCKER_HUB_ID}/$*:${CONNEXT_VERSION}
 
 
 # prune dangling comtainers and images

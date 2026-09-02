@@ -103,6 +103,20 @@ test("image profiles precede defaults", function()
   list_equal(profiles, { "dev" })
 end)
 
+test("registry-qualified upstream images select their profiles", function()
+  local sdk = devrun.select_profiles(
+    { image = "docker.io/rticom/connext-sdk:7.7.0", profiles = {} },
+    devrun.config
+  )
+  list_equal(sdk, { "dev", "identity", "connext" })
+
+  local xubuntu = devrun.select_profiles(
+    { image = "docker.io/hectorm/xubuntu:latest", profiles = {} },
+    devrun.config
+  )
+  list_equal(xubuntu, { "gui" })
+end)
+
 test("later profiles override scalars and append lists", function()
   local config = {
     profiles = {
@@ -275,8 +289,12 @@ test("GUI rendering is portable and preserves the image default command", functi
     not_contains(command, "-it")
     local shm = assert(index_of(command, "--shm-size"), "missing --shm-size")
     equal(command[shm + 1], "2g")
+    contains(command, "/tmp/My Project:/workspace")
+    local workdir = assert(index_of(command, "-w"), "missing GUI workdir")
+    equal(command[workdir + 1], "/workspace")
     contains(command, "3322:3322/tcp")
     contains(command, "3389:3389/tcp")
+    contains(command, "TZ=" .. devrun.config.defaults.timezone)
     equal(command[#command], image, "GUI command must end at image")
   end
 end)
