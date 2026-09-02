@@ -41,6 +41,10 @@ local function not_contains(values, unexpected, message)
   end
 end
 
+local function joined(values)
+  return table.concat(values, "")
+end
+
 local function fake_context(engine)
   return {
     cwd = "/tmp/My Project",
@@ -178,6 +182,56 @@ test("dev mounts shared home and existing optional configuration read-only", fun
   assert(warnings[1]:match("%.clangd"), warnings[1])
 end)
 
+test("connext mounts an existing license at the versioned SDK path", function()
+  local options = devrun.parse_args({
+    "rticom/connext-sdk:7.7.0", "--engine", "podman", "--dry-run",
+  })
+  local context = fake_context("podman")
+  local launch = devrun.resolve_launch(options, devrun.config, context)
+  devrun.filter_optional_mounts(launch, function(path)
+    return path == devrun.config.defaults.license_file
+  end, function() end)
+  local command = devrun.build_command(options, launch, context)
+
+  contains(command, devrun.config.defaults.license_file
+    .. ":/opt/rti.com/rti_connext_dds-"
+    .. devrun.config.defaults.connext_version .. "/rti_license.dat:ro")
+end)
+
+test("connext warns and continues when the license is absent", function()
+  local options = devrun.parse_args({
+    "rticom/connext-sdk:7.7.0", "--engine", "docker", "--dry-run",
+  })
+  local context = fake_context("docker")
+  local launch = devrun.resolve_launch(options, devrun.config, context)
+  local warnings = {}
+  devrun.filter_optional_mounts(launch, function() return false end, function(message)
+    warnings[#warnings + 1] = message
+  end)
+  local command = devrun.build_command(options, launch, context)
+
+  assert(joined(warnings):match("RTI license file does not exist"), joined(warnings))
+  not_contains(command, devrun.config.defaults.license_file
+    .. ":/opt/rti.com/rti_connext_dds-"
+    .. devrun.config.defaults.connext_version .. "/rti_license.dat:ro")
+end)
+
+test("connext adds the configured network to the run command", function()
+  local options = devrun.parse_args({
+    "rticom/connext-sdk:7.7.0", "--engine", "docker", "--dry-run",
+  })
+  local context = fake_context("docker")
+  local launch = devrun.resolve_launch(options, devrun.config, context)
+  local command = devrun.build_command(options, launch, context)
+  local network_index
+  for index, value in ipairs(command) do
+    if value == "--network" then network_index = index end
+  end
+
+  assert(network_index, "missing --network")
+  equal(command[network_index + 1], devrun.config.defaults.network)
+end)
+
 test("identity rendering keeps Podman flags out of Docker", function()
   local function identity_command(engine)
     local options = devrun.parse_args({
@@ -288,6 +342,195 @@ test("run checks the generated container name before launch", function()
 
   equal(status, 2)
   assert(inspected:match("'my%-project%-ubuntu'"), inspected)
+end)
+
+test("connext launch uses an existing network without creating it", function()
+  local commands = {}
+  local captures = {}
+  local network = devrun.config.defaults.network
+  local status = devrun.run({
+    "rticom/connext-sdk:7.7.0", "--engine", "docker",
+  }, {
+    cwd = "/tmp/project",
+    host_identity = function()
+      return { uid = "1001", gid = "1002", username = "tester" }
+    end,
+    path_exists = function() return false end,
+    stderr = function() end,
+    capture = function(arguments)
+      captures[#captures + 1] = arguments
+      return 0, "other\n" .. network .. "\n"
+    end,
+    execute = function(command)
+      commands[#commands + 1] = command
+      if #commands == 1 then return nil, "exit", 1 end
+      return true, "exit", 0
+    end,
+  })
+
+  equal(status, 0)
+  equal(#captures, 1)
+  list_equal(captures[1], { "docker", "network", "ls", "--format", "{{.Name}}" })
+  equal(#commands, 2)
+  assert(commands[2]:match("'docker' 'run'"), commands[2])
+end)
+
+test("connext launch creates an absent bridge network before launch", function()
+  local commands = {}
+  local network = devrun.config.defaults.network
+  local status = devrun.run({
+    "rticom/connext-sdk:7.7.0", "--engine", "podman",
+  }, {
+    cwd = "/tmp/project",
+    host_identity = function()
+      return { uid = "1001", gid = "1002", username = "tester" }
+    end,
+    path_exists = function() return false end,
+    stderr = function() end,
+    capture = function() return 0, "unrelated\n" end,
+    execute = function(command)
+      commands[#commands + 1] = command
+      if #commands == 1 then return nil, "exit", 1 end
+      return true, "exit", 0
+    end,
+  })
+
+  equal(status, 0)
+  equal(#commands, 3)
+  equal(commands[2], devrun.render_command({
+    "podman", "network", "create", "--driver", "bridge", network,
+  }))
+  assert(commands[3]:match("'podman' 'run'"), commands[3])
+end)
+
+test("connext launch stops when network creation fails", function()
+  local commands = {}
+  local errors = {}
+  local status = devrun.run({
+    "rticom/connext-sdk:7.7.0", "--engine", "docker",
+  }, {
+    cwd = "/tmp/project",
+    host_identity = function()
+      return { uid = "1001", gid = "1002", username = "tester" }
+    end,
+    path_exists = function() return false end,
+    stderr = function(value) errors[#errors + 1] = value end,
+    capture = function() return 0, "" end,
+    execute = function(command)
+      commands[#commands + 1] = command
+      if #commands == 1 then return nil, "exit", 1 end
+      return nil, "exit", 42
+    end,
+  })
+
+  equal(status, 1)
+  equal(#commands, 2)
+  assert(commands[2]:match("network' 'create"), commands[2])
+  assert(joined(errors):match("failed to create network"), joined(errors))
+  assert(joined(errors):match("exit 42"), joined(errors))
+end)
+
+test("connext launch treats network listing failure as operational failure", function()
+  local commands = {}
+  local errors = {}
+  local status = devrun.run({
+    "rticom/connext-sdk:7.7.0", "--engine", "docker",
+  }, {
+    cwd = "/tmp/project",
+    host_identity = function()
+      return { uid = "1001", gid = "1002", username = "tester" }
+    end,
+    path_exists = function() return false end,
+    stderr = function(value) errors[#errors + 1] = value end,
+    capture = function() return 13, "permission denied\n" end,
+    execute = function(command)
+      commands[#commands + 1] = command
+      return nil, "exit", 1
+    end,
+  })
+
+  equal(status, 1)
+  equal(#commands, 1)
+  assert(joined(errors):match("failed to inspect networks"), joined(errors))
+  assert(joined(errors):match("permission denied"), joined(errors))
+end)
+
+test("connext dry-run prints prerequisites without external side effects", function()
+  local output = {}
+  local side_effects = 0
+  local status = devrun.run({
+    "rticom/connext-sdk:7.7.0", "--engine", "docker", "--dry-run",
+  }, {
+    cwd = "/tmp/project",
+    path_exists = function() return false end,
+    host_identity = function()
+      return { uid = "1001", gid = "1002", username = "tester" }
+    end,
+    stdout = function(value) output[#output + 1] = value end,
+    stderr = function() end,
+    capture = function() side_effects = side_effects + 1 end,
+    execute = function() side_effects = side_effects + 1 end,
+  })
+
+  equal(status, 0)
+  equal(side_effects, 0)
+  local rendered = joined(output)
+  assert(rendered:match("# inspect: 'docker' 'network' 'ls'"), rendered)
+  assert(rendered:match("# if absent: 'docker' 'network' 'create' '%-%-driver' 'bridge'"), rendered)
+  assert(rendered:match("'docker' 'run'.*'%-%-network'"), rendered)
+end)
+
+test("explicit generic dev replaces Connext work", function()
+  local output = {}
+  local path_checks = {}
+  local status = devrun.run({
+    "rticom/connext-sdk:7.7.0", "-p", "dev", "--engine", "docker", "--dry-run",
+  }, {
+    cwd = "/tmp/project",
+    path_exists = function(path)
+      path_checks[#path_checks + 1] = path
+      return false
+    end,
+    stdout = function(value) output[#output + 1] = value end,
+    stderr = function() end,
+    capture = function() error("network capture must not run") end,
+    execute = function() error("execute must not run") end,
+  })
+
+  equal(status, 0)
+  equal(#path_checks, 3)
+  local rendered = joined(output)
+  assert(not rendered:match("network"), rendered)
+  assert(not rendered:match("rti_license"), rendered)
+end)
+
+test("network and license shell metacharacters remain quoted", function()
+  local old_network = devrun.config.defaults.network
+  local old_license = devrun.config.defaults.license_file
+  devrun.config.defaults.network = "team net;$(false)'x"
+  devrun.config.defaults.license_file = "/tmp/license path;$(false)'x.dat"
+
+  local output = {}
+  local status = devrun.run({
+    "rticom/connext-sdk:7.7.0", "--engine", "podman", "--dry-run",
+  }, {
+    cwd = "/tmp/project",
+    path_exists = function(path) return path == devrun.config.defaults.license_file end,
+    host_identity = function()
+      return { uid = "1001", gid = "1002", username = "tester" }
+    end,
+    stdout = function(value) output[#output + 1] = value end,
+    stderr = function() end,
+  })
+  devrun.config.defaults.network = old_network
+  devrun.config.defaults.license_file = old_license
+
+  equal(status, 0)
+  local rendered = joined(output)
+  assert(rendered:find(devrun.shell_quote("team net;$(false)'x"), 1, true), rendered)
+  assert(rendered:find(devrun.shell_quote("/tmp/license path;$(false)'x.dat:"
+    .. "/opt/rti.com/rti_connext_dds-" .. devrun.config.defaults.connext_version
+    .. "/rti_license.dat:ro"), 1, true), rendered)
 end)
 
 local failures = 0

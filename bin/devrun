@@ -49,9 +49,20 @@ devrun.config = {
       identity = true,
     },
     connext = function(ctx)
+      local version = ctx.config.defaults.connext_version
+      local license_file = ctx.config.defaults.license_file
       return {
         ensure_network = ctx.config.defaults.network,
         network = ctx.config.defaults.network,
+        optional_mounts = {
+          {
+            source = license_file,
+            target = "/opt/rti.com/rti_connext_dds-" .. version .. "/rti_license.dat",
+            readonly = true,
+            missing_message = "RTI license file does not exist; continuing without mount: "
+              .. license_file,
+          },
+        },
       }
     end,
     gui = function(ctx)
@@ -229,6 +240,7 @@ function devrun.resolve_launch(options, config, context)
     merge(resolved, mapping.overrides)
   end
   if resolved.home_volume and resolved.container_home then
+    resolved.mounts = resolved.mounts or {}
     resolved.mounts[#resolved.mounts + 1] = {
       source = resolved.home_volume,
       target = resolved.container_home,
@@ -304,6 +316,7 @@ function devrun.build_command(options, launch, context)
   end
 
   if launch.workdir then append(arguments, "-w", launch.workdir) end
+  if launch.network then append(arguments, "--network", launch.network) end
   for _, mount in ipairs(launch.mounts or {}) do
     local specification = mount.source .. ":" .. mount.target
     if mount.readonly then specification = specification .. ":ro" end
@@ -340,9 +353,10 @@ end
 function devrun.filter_optional_mounts(launch, path_exists, warn)
   for _, mount in ipairs(launch.optional_mounts or {}) do
     if mount.target and path_exists(mount.source) then
+      launch.mounts = launch.mounts or {}
       launch.mounts[#launch.mounts + 1] = mount
     else
-      warn("optional host path does not exist; skipping " .. mount.source)
+      warn(mount.missing_message or ("optional host path does not exist; skipping " .. mount.source))
     end
   end
   return launch
@@ -361,6 +375,38 @@ end
 
 function devrun.execute(arguments, execute)
   return process_status(execute(devrun.render_command(arguments)))
+end
+
+local function capture_command(arguments)
+  local pipe, open_error = io.popen(devrun.render_command(arguments) .. " 2>&1", "r")
+  if not pipe then return 1, tostring(open_error) end
+  local output = pipe:read("*a")
+  local first, reason, code = pipe:close()
+  return process_status(first, reason, code), output
+end
+
+function devrun.network_commands(engine, network)
+  return
+    { engine, "network", "ls", "--format", "{{.Name}}" },
+    { engine, "network", "create", "--driver", "bridge", network }
+end
+
+function devrun.ensure_network(engine, network, capture, execute)
+  local inspect, create = devrun.network_commands(engine, network)
+  local status, output = capture(inspect)
+  if status ~= 0 then
+    return false, "failed to inspect networks with " .. devrun.render_command(inspect)
+      .. " (exit " .. status .. ")" .. (output ~= "" and ": " .. output:gsub("%s+$", "") or "")
+  end
+  for existing in (output .. "\n"):gmatch("([^\r\n]*)\r?\n") do
+    if existing == network then return true end
+  end
+  status = devrun.execute(create, execute)
+  if status ~= 0 then
+    return false, "failed to create network " .. devrun.shell_quote(network)
+      .. " with bridge driver (exit " .. status .. ")"
+  end
+  return true
 end
 
 function devrun.container_exists(engine, name, execute)
@@ -414,6 +460,7 @@ function devrun.run(arguments, dependencies)
   local stdout = dependencies.stdout or function(value) io.stdout:write(value) end
   local stderr = dependencies.stderr or function(value) io.stderr:write(value) end
   local execute = dependencies.execute or os.execute
+  local capture = dependencies.capture or capture_command
   local ok, options = pcall(devrun.parse_args, arguments)
   if not ok then
     stderr("devrun: " .. tostring(options) .. "\n")
@@ -450,6 +497,12 @@ function devrun.run(arguments, dependencies)
     return 2
   end
   if options.dry_run then
+    if launch.ensure_network then
+      local inspect, create = devrun.network_commands(context.engine, launch.ensure_network)
+      stdout("# ensure network " .. devrun.shell_quote(launch.ensure_network) .. " exists\n")
+      stdout("# inspect: " .. devrun.render_command(inspect) .. "\n")
+      stdout("# if absent: " .. devrun.render_command(create) .. "\n")
+    end
     stdout(devrun.render_command(command) .. "\n")
     return 0
   end
@@ -460,6 +513,15 @@ function devrun.run(arguments, dependencies)
       .. " or remove it explicitly with "
       .. devrun.render_command({ context.engine, "rm", name }) .. "\n")
     return 2
+  end
+  if launch.ensure_network then
+    local network_ok, network_error = devrun.ensure_network(
+      context.engine, launch.ensure_network, capture, execute
+    )
+    if not network_ok then
+      stderr("devrun: " .. network_error .. "\n")
+      return 1
+    end
   end
   return devrun.execute(command, execute)
 end

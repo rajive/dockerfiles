@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted. Implementation is in progress; the core CLI and dry-run slice is
-implemented.
+Accepted. Implementation is in progress; the core CLI, runnable development,
+identity, and Connext runtime slices are implemented.
 
 ## Problem
 
