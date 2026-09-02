@@ -1,0 +1,354 @@
+#!/usr/bin/env lua
+
+local devrun = {}
+
+local function getenv(name, fallback)
+  local value = os.getenv(name)
+  if value == nil or value == "" then
+    return fallback
+  end
+  return value
+end
+
+devrun.config = {
+  engine = nil,
+  defaults = {
+    connext_version = getenv("CONNEXT_VERSION", "7.7.0"),
+    network = getenv("MY_NET", "my-net"),
+    license_file = getenv("RTI_LICENSE_FILE", getenv("HOME", "") .. "/rti/licenses/rti_license.dat"),
+    timezone = getenv("TZ", "America/Los_Angeles"),
+    home_volume = "devrun",
+    ssh_port = tonumber(getenv("DEVRUN_SSH_PORT", "3322")),
+    rdp_port = tonumber(getenv("DEVRUN_RDP_PORT", "3389")),
+  },
+  default_profiles = { "dev" },
+  profiles = {
+    dev = function(ctx)
+      return {
+        interactive = true,
+        remove = true,
+        mounts = {
+          { source = ctx.cwd, target = "/workspace" },
+        },
+        workdir = "/workspace",
+        command = { "/bin/bash" },
+        env = {
+          TERM = ctx.env.TERM,
+          TZ = ctx.config.defaults.timezone,
+        },
+      }
+    end,
+    identity = {
+      identity = true,
+    },
+    connext = function(ctx)
+      return {
+        ensure_network = ctx.config.defaults.network,
+        network = ctx.config.defaults.network,
+      }
+    end,
+    gui = function(ctx)
+      return {
+        detached = true,
+        remove = true,
+        shm_size = "2g",
+        ports = {
+          { host = ctx.config.defaults.ssh_port, container = 3322, protocol = "tcp" },
+          { host = ctx.config.defaults.rdp_port, container = 3389, protocol = "tcp" },
+        },
+      }
+    end,
+  },
+  images = {
+    {
+      pattern = "^rticom/connext%-sdk:",
+      profiles = { "dev", "identity", "connext" },
+      overrides = { container_user = "rtiuser", container_home = "/home/rtiuser" },
+    },
+    {
+      pattern = "connext%-sdk%-dev:",
+      profiles = { "dev", "identity", "connext" },
+      overrides = { container_user = "rtiuser", container_home = "/home/rtiuser" },
+    },
+    {
+      pattern = "connext%-tools:",
+      profiles = { "gui", "connext" },
+      overrides = { container_home = "/home/user" },
+    },
+    {
+      pattern = "^hectorm/xubuntu:",
+      profiles = { "gui" },
+      overrides = {},
+    },
+  },
+}
+
+local usage = [[Usage: devrun IMAGE [OPTIONS]
+
+Options:
+  -p, --profile NAME   Select a profile; may be repeated
+      --name NAME      Override the generated container name
+      --engine ENGINE  Select docker or podman
+      --dry-run        Print the quoted container command
+  -h, --help           Show this help
+]]
+
+local function fail(message, level)
+  error(message, (level or 1) + 1)
+end
+
+function devrun.parse_args(arguments)
+  local options = { profiles = {}, dry_run = false, help = false }
+  local index = 1
+
+  while index <= #arguments do
+    local value = arguments[index]
+    if value == "-h" or value == "--help" then
+      options.help = true
+    elseif value == "--dry-run" then
+      options.dry_run = true
+    elseif value == "-p" or value == "--profile" then
+      index = index + 1
+      if not arguments[index] then
+        fail(value .. " requires a profile name", 1)
+      end
+      options.profiles[#options.profiles + 1] = arguments[index]
+    elseif value == "--name" or value == "--engine" then
+      index = index + 1
+      if not arguments[index] then
+        fail(value .. " requires a value", 1)
+      end
+      options[value == "--name" and "name" or "engine"] = arguments[index]
+    elseif value:sub(1, 1) == "-" then
+      fail("unknown option: " .. value, 1)
+    elseif options.image then
+      fail("unexpected argument: " .. value, 1)
+    else
+      options.image = value
+    end
+    index = index + 1
+  end
+
+  if not options.image and not options.help then
+    fail("IMAGE is required", 1)
+  end
+  if options.engine and options.engine ~= "docker" and options.engine ~= "podman" then
+    fail("engine must be docker or podman", 1)
+  end
+  return options
+end
+
+local function copy_list(values)
+  local result = {}
+  for index, value in ipairs(values or {}) do
+    result[index] = value
+  end
+  return result
+end
+
+local function matching_image(image, config)
+  for _, mapping in ipairs(config.images or {}) do
+    local matches = mapping.exact and image == mapping.exact
+      or mapping.pattern and image:match(mapping.pattern)
+    if matches then
+      return mapping
+    end
+  end
+  return nil
+end
+
+function devrun.select_profiles(options, config)
+  if #options.profiles > 0 then
+    return copy_list(options.profiles)
+  end
+  local mapping = matching_image(options.image, config)
+  if mapping then
+    return copy_list(mapping.profiles)
+  end
+  return copy_list(config.default_profiles)
+end
+
+local list_fields = {
+  mounts = true,
+  optional_mounts = true,
+  ports = true,
+  run_args = true,
+  command = true,
+}
+
+local keyed_fields = { env = true }
+
+local function merge(target, source)
+  for key, value in pairs(source or {}) do
+    if list_fields[key] then
+      target[key] = target[key] or {}
+      for _, item in ipairs(value) do
+        target[key][#target[key] + 1] = item
+      end
+    elseif keyed_fields[key] then
+      target[key] = target[key] or {}
+      for item_key, item_value in pairs(value) do
+        target[key][item_key] = item_value
+      end
+    else
+      target[key] = value
+    end
+  end
+  return target
+end
+
+function devrun.resolve_profiles(names, config, context)
+  local resolved = {}
+  for _, name in ipairs(names) do
+    local profile = config.profiles[name]
+    if not profile then
+      fail("unknown profile: " .. name, 1)
+    end
+    if type(profile) == "function" then
+      profile = profile(context)
+    end
+    merge(resolved, profile)
+  end
+  return resolved
+end
+
+function devrun.resolve_launch(options, config, context)
+  context.config = config
+  context.image = options.image
+  local profiles = devrun.select_profiles(options, config)
+  local resolved = devrun.resolve_profiles(profiles, config, context)
+  local mapping = matching_image(options.image, config)
+  if #options.profiles == 0 and mapping then
+    merge(resolved, mapping.overrides)
+  end
+  resolved.profiles = profiles
+  return resolved
+end
+
+local function basename(path)
+  local trimmed = path:gsub("/+$", "")
+  return trimmed:match("([^/]+)$") or "workspace"
+end
+
+function devrun.container_name(cwd, image)
+  local repository = image:gsub("@.*$", ""):gsub(":([^/]*)$", "")
+  local raw = basename(cwd) .. "-" .. basename(repository)
+  local name = raw:lower():gsub("[^a-z0-9_.-]+", "-"):gsub("[-_.]+", "-")
+  name = name:gsub("^-+", ""):gsub("-+$", ""):sub(1, 63):gsub("-+$", "")
+  if name == "" then
+    return "devrun"
+  end
+  return name
+end
+
+function devrun.shell_quote(value)
+  value = tostring(value)
+  if value:find("[%z\r\n]") then
+    fail("command arguments may not contain NUL or newlines", 1)
+  end
+  return "'" .. value:gsub("'", "'\"'\"'") .. "'"
+end
+
+local function append(arguments, ...)
+  for index = 1, select("#", ...) do
+    arguments[#arguments + 1] = select(index, ...)
+  end
+end
+
+function devrun.build_command(options, launch, context)
+  local engine = options.engine or context.engine or launch.engine
+  if not engine then
+    fail("container engine has not been selected", 1)
+  end
+
+  local arguments = { engine, "run" }
+  if launch.remove then append(arguments, "--rm") end
+  if launch.interactive then append(arguments, "-it") end
+  if launch.detached then append(arguments, "-d") end
+  append(arguments, "--name", options.name or devrun.container_name(context.cwd, options.image))
+
+  if launch.workdir then append(arguments, "-w", launch.workdir) end
+  for _, mount in ipairs(launch.mounts or {}) do
+    local specification = mount.source .. ":" .. mount.target
+    if mount.readonly then specification = specification .. ":ro" end
+    append(arguments, "-v", specification)
+  end
+  local env_keys = {}
+  for key, value in pairs(launch.env or {}) do
+    if value ~= nil then env_keys[#env_keys + 1] = key end
+  end
+  table.sort(env_keys)
+  for _, key in ipairs(env_keys) do
+    append(arguments, "-e", key .. "=" .. tostring(launch.env[key]))
+  end
+  for _, value in ipairs(launch.run_args or {}) do append(arguments, value) end
+  append(arguments, options.image)
+  for _, value in ipairs(launch.command or {}) do append(arguments, value) end
+  return arguments
+end
+
+function devrun.render_command(arguments)
+  local quoted = {}
+  for index, value in ipairs(arguments) do
+    quoted[index] = devrun.shell_quote(value)
+  end
+  return table.concat(quoted, " ")
+end
+
+local function command_exists(command)
+  local result = os.execute("command -v " .. devrun.shell_quote(command) .. " >/dev/null 2>&1")
+  return result == true or result == 0
+end
+
+local function select_engine(options, config)
+  if options.engine then return options.engine end
+  if config.engine then return config.engine end
+  if command_exists("podman") then return "podman" end
+  if command_exists("docker") then return "docker" end
+  fail("neither podman nor docker was found", 1)
+end
+
+local function current_directory()
+  local pipe = assert(io.popen("pwd", "r"))
+  local cwd = assert(pipe:read("*l"))
+  pipe:close()
+  return cwd
+end
+
+local function main(arguments)
+  local ok, options = pcall(devrun.parse_args, arguments)
+  if not ok then
+    io.stderr:write("devrun: ", tostring(options), "\n")
+    io.stderr:write("Try 'devrun --help' for usage.\n")
+    return 2
+  end
+  if options.help then
+    io.stdout:write(usage)
+    return 0
+  end
+  if not options.dry_run then
+    io.stderr:write("devrun: this implementation slice currently requires --dry-run\n")
+    return 2
+  end
+
+  local context = {
+    cwd = current_directory(),
+    home = getenv("HOME", ""),
+    env = { TERM = os.getenv("TERM") },
+    engine = select_engine(options, devrun.config),
+  }
+  local resolved_ok, launch = pcall(devrun.resolve_launch, options, devrun.config, context)
+  if not resolved_ok then
+    io.stderr:write("devrun: ", tostring(launch), "\n")
+    return 2
+  end
+  local command = devrun.build_command(options, launch, context)
+  io.stdout:write(devrun.render_command(command), "\n")
+  return 0
+end
+
+if not _G.DEVRUN_TESTING then
+  os.exit(main(arg))
+end
+
+return devrun
