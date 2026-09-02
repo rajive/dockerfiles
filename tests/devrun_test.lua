@@ -33,6 +33,24 @@ local function contains(values, expected, message)
   error((message or "list does not contain value") .. ": " .. expected, 2)
 end
 
+local function not_contains(values, unexpected, message)
+  for _, value in ipairs(values) do
+    if value == unexpected then
+      error((message or "list contains unexpected value") .. ": " .. unexpected, 2)
+    end
+  end
+end
+
+local function fake_context(engine)
+  return {
+    cwd = "/tmp/My Project",
+    home = "/home/Test User",
+    env = { TERM = "xterm-256color" },
+    engine = engine,
+    identity = { uid = "1001", gid = "1002", username = "test user" },
+  }
+end
+
 test("parse required image and repeated profiles", function()
   local options = devrun.parse_args({
     "ubuntu:24.04", "-p", "dev", "--profile", "identity",
@@ -132,9 +150,144 @@ test("render minimal dev command", function()
   contains(command, "--rm")
   contains(command, "-it")
   contains(command, "/tmp/My Project:/workspace")
+  contains(command, "devrun:/home/test")
   contains(command, "/workspace")
   contains(command, "ubuntu:24.04")
   contains(command, "/bin/bash")
+end)
+
+test("dev mounts shared home and existing optional configuration read-only", function()
+  local options = devrun.parse_args({
+    "ubuntu:24.04", "-p", "dev", "--engine", "podman", "--dry-run",
+  })
+  local context = fake_context("podman")
+  local launch = devrun.resolve_launch(options, devrun.config, context)
+  local warnings = {}
+  devrun.filter_optional_mounts(launch, function(path)
+    return path ~= "/home/Test User/.clangd"
+  end, function(message)
+    warnings[#warnings + 1] = message
+  end)
+  local command = devrun.build_command(options, launch, context)
+
+  contains(command, "devrun:/home/Test User")
+  contains(command, "/home/Test User/.config/nvim:/home/Test User/.config/nvim:ro")
+  contains(command, "/home/Test User/.gitconfig:/home/Test User/.gitconfig:ro")
+  not_contains(command, "/home/Test User/.clangd:/home/Test User/.clangd:ro")
+  equal(#warnings, 1)
+  assert(warnings[1]:match("%.clangd"), warnings[1])
+end)
+
+test("identity rendering keeps Podman flags out of Docker", function()
+  local function identity_command(engine)
+    local options = devrun.parse_args({
+      "ubuntu:24.04", "-p", "dev", "-p", "identity", "--engine", engine, "--dry-run",
+    })
+    local context = fake_context(engine)
+    local launch = devrun.resolve_launch(options, devrun.config, context)
+    return devrun.build_command(options, launch, context)
+  end
+
+  local podman = identity_command("podman")
+  contains(podman, "1001:1002")
+  contains(podman, "--userns=keep-id")
+  contains(podman, "--passwd-entry")
+  contains(podman, "USER=test user")
+  contains(podman, "HOME=/home/Test User")
+
+  local docker = identity_command("docker")
+  contains(docker, "1001:1002")
+  not_contains(docker, "--userns=keep-id")
+  not_contains(docker, "--passwd-entry")
+end)
+
+test("run executes quoted command and propagates engine status", function()
+  local commands = {}
+  local status = devrun.run({
+    "ubuntu:24.04", "-p", "dev", "--engine", "docker", "--name", "name with spaces",
+  }, {
+    cwd = "/tmp/Project With Spaces",
+    host_identity = function()
+      return { uid = "1001", gid = "1002", username = "tester" }
+    end,
+    path_exists = function() return false end,
+    stderr = function() end,
+    execute = function(command)
+      commands[#commands + 1] = command
+      if #commands == 1 then return nil, "exit", 1 end
+      return nil, "exit", 37
+    end,
+  })
+
+  equal(status, 37)
+  assert(commands[1]:match("'docker' 'container' 'inspect' 'name with spaces'"), commands[1])
+  assert(commands[2]:match("'/tmp/Project With Spaces:/workspace'"), commands[2])
+  assert(commands[2]:match("'name with spaces'"), commands[2])
+end)
+
+test("run resolves host identity only for identity profile", function()
+  local identity_calls = 0
+  local status = devrun.run({
+    "ubuntu:24.04", "-p", "dev", "--engine", "docker", "--dry-run",
+  }, {
+    cwd = "/tmp/project",
+    host_identity = function()
+      identity_calls = identity_calls + 1
+      return { uid = "1001", gid = "1002", username = "tester" }
+    end,
+    path_exists = function() return false end,
+    stderr = function() end,
+    stdout = function() end,
+  })
+
+  equal(status, 0)
+  equal(identity_calls, 0)
+end)
+
+test("run refuses to replace an existing named container", function()
+  local commands = {}
+  local errors = {}
+  local status = devrun.run({
+    "ubuntu:24.04", "-p", "dev", "--engine", "podman", "--name", "existing",
+  }, {
+    cwd = "/tmp/project",
+    host_identity = function()
+      return { uid = "1001", gid = "1002", username = "tester" }
+    end,
+    path_exists = function() return false end,
+    stderr = function(value) errors[#errors + 1] = value end,
+    execute = function(command)
+      commands[#commands + 1] = command
+      return true, "exit", 0
+    end,
+  })
+
+  equal(status, 2)
+  equal(#commands, 1)
+  assert(commands[1]:match("container.*inspect"), commands[1])
+  assert(table.concat(errors):match("already exists"), table.concat(errors))
+  assert(table.concat(errors):match("choose another %-%-name"), table.concat(errors))
+end)
+
+test("run checks the generated container name before launch", function()
+  local inspected
+  local status = devrun.run({
+    "ubuntu:24.04", "-p", "dev", "--engine", "docker",
+  }, {
+    cwd = "/tmp/My Project",
+    host_identity = function()
+      return { uid = "1001", gid = "1002", username = "tester" }
+    end,
+    path_exists = function() return false end,
+    stderr = function() end,
+    execute = function(command)
+      inspected = command
+      return true, "exit", 0
+    end,
+  })
+
+  equal(status, 2)
+  assert(inspected:match("'my%-project%-ubuntu'"), inspected)
 end)
 
 local failures = 0

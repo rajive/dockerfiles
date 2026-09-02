@@ -30,7 +30,14 @@ devrun.config = {
         mounts = {
           { source = ctx.cwd, target = "/workspace" },
         },
+        home_volume = ctx.config.defaults.home_volume,
+        optional_home_mounts = {
+          { source = ctx.home .. "/.config/nvim", target = ".config/nvim", readonly = true },
+          { source = ctx.home .. "/.gitconfig", target = ".gitconfig", readonly = true },
+          { source = ctx.home .. "/.clangd", target = ".clangd", readonly = true },
+        },
         workdir = "/workspace",
+        container_home = ctx.home,
         command = { "/bin/bash" },
         env = {
           TERM = ctx.env.TERM,
@@ -221,6 +228,20 @@ function devrun.resolve_launch(options, config, context)
   if #options.profiles == 0 and mapping then
     merge(resolved, mapping.overrides)
   end
+  if resolved.home_volume and resolved.container_home then
+    resolved.mounts[#resolved.mounts + 1] = {
+      source = resolved.home_volume,
+      target = resolved.container_home,
+    }
+  end
+  for _, mount in ipairs(resolved.optional_home_mounts or {}) do
+    resolved.optional_mounts = resolved.optional_mounts or {}
+    resolved.optional_mounts[#resolved.optional_mounts + 1] = {
+      source = mount.source,
+      target = resolved.container_home and (resolved.container_home .. "/" .. mount.target),
+      readonly = mount.readonly,
+    }
+  end
   resolved.profiles = profiles
   return resolved
 end
@@ -267,6 +288,21 @@ function devrun.build_command(options, launch, context)
   if launch.detached then append(arguments, "-d") end
   append(arguments, "--name", options.name or devrun.container_name(context.cwd, options.image))
 
+  if launch.identity then
+    local identity = context.identity
+    if not identity then
+      fail("host identity has not been resolved", 1)
+    end
+    local container_home = launch.container_home or context.home
+    append(arguments, "--user", identity.uid .. ":" .. identity.gid)
+    if engine == "podman" then
+      append(arguments, "--userns=keep-id")
+      append(arguments, "--passwd-entry",
+        identity.username .. ":x:" .. identity.uid .. ":" .. identity.gid
+          .. ":" .. identity.username .. ":" .. container_home .. ":/bin/bash")
+    end
+  end
+
   if launch.workdir then append(arguments, "-w", launch.workdir) end
   for _, mount in ipairs(launch.mounts or {}) do
     local specification = mount.source .. ":" .. mount.target
@@ -274,6 +310,12 @@ function devrun.build_command(options, launch, context)
     append(arguments, "-v", specification)
   end
   local env_keys = {}
+  if launch.identity then
+    launch.env = launch.env or {}
+    launch.env.USER = context.identity.username
+    launch.env.LOGNAME = context.identity.username
+    launch.env.HOME = launch.container_home or context.home
+  end
   for key, value in pairs(launch.env or {}) do
     if value ~= nil then env_keys[#env_keys + 1] = key end
   end
@@ -293,6 +335,38 @@ function devrun.render_command(arguments)
     quoted[index] = devrun.shell_quote(value)
   end
   return table.concat(quoted, " ")
+end
+
+function devrun.filter_optional_mounts(launch, path_exists, warn)
+  for _, mount in ipairs(launch.optional_mounts or {}) do
+    if mount.target and path_exists(mount.source) then
+      launch.mounts[#launch.mounts + 1] = mount
+    else
+      warn("optional host path does not exist; skipping " .. mount.source)
+    end
+  end
+  return launch
+end
+
+local function process_status(first, reason, code)
+  if first == true then return 0 end
+  if type(first) == "number" then
+    if first > 255 then return math.floor(first / 256) end
+    return first
+  end
+  if reason == "exit" and type(code) == "number" then return code end
+  if reason == "signal" and type(code) == "number" then return 128 + code end
+  return 1
+end
+
+function devrun.execute(arguments, execute)
+  return process_status(execute(devrun.render_command(arguments)))
+end
+
+function devrun.container_exists(engine, name, execute)
+  local command = devrun.render_command({ engine, "container", "inspect", name })
+    .. " >/dev/null 2>&1"
+  return process_status(execute(command)) == 0
 end
 
 local function command_exists(command)
@@ -315,40 +389,83 @@ local function current_directory()
   return cwd
 end
 
-local function main(arguments)
+local function read_command_line(command)
+  local pipe = assert(io.popen(command, "r"))
+  local value = assert(pipe:read("*l"))
+  assert(pipe:close())
+  return value
+end
+
+local function host_identity()
+  return {
+    uid = read_command_line("id -u"),
+    gid = read_command_line("id -g"),
+    username = read_command_line("id -un"),
+  }
+end
+
+local function path_exists(path)
+  local ok, _, code = os.rename(path, path)
+  return ok or code == 13
+end
+
+function devrun.run(arguments, dependencies)
+  dependencies = dependencies or {}
+  local stdout = dependencies.stdout or function(value) io.stdout:write(value) end
+  local stderr = dependencies.stderr or function(value) io.stderr:write(value) end
+  local execute = dependencies.execute or os.execute
   local ok, options = pcall(devrun.parse_args, arguments)
   if not ok then
-    io.stderr:write("devrun: ", tostring(options), "\n")
-    io.stderr:write("Try 'devrun --help' for usage.\n")
+    stderr("devrun: " .. tostring(options) .. "\n")
+    stderr("Try 'devrun --help' for usage.\n")
     return 2
   end
   if options.help then
-    io.stdout:write(usage)
+    stdout(usage)
     return 0
-  end
-  if not options.dry_run then
-    io.stderr:write("devrun: this implementation slice currently requires --dry-run\n")
-    return 2
   end
 
   local context = {
-    cwd = current_directory(),
+    cwd = dependencies.cwd or current_directory(),
     home = getenv("HOME", ""),
     env = { TERM = os.getenv("TERM") },
     engine = select_engine(options, devrun.config),
   }
   local resolved_ok, launch = pcall(devrun.resolve_launch, options, devrun.config, context)
   if not resolved_ok then
-    io.stderr:write("devrun: ", tostring(launch), "\n")
+    stderr("devrun: " .. tostring(launch) .. "\n")
     return 2
   end
-  local command = devrun.build_command(options, launch, context)
-  io.stdout:write(devrun.render_command(command), "\n")
-  return 0
+  if launch.identity then
+    context.identity = (dependencies.host_identity or host_identity)()
+  end
+  devrun.filter_optional_mounts(
+    launch,
+    dependencies.path_exists or path_exists,
+    function(message) stderr("devrun: warning: " .. message .. "\n") end
+  )
+  local command_ok, command = pcall(devrun.build_command, options, launch, context)
+  if not command_ok then
+    stderr("devrun: " .. tostring(command) .. "\n")
+    return 2
+  end
+  if options.dry_run then
+    stdout(devrun.render_command(command) .. "\n")
+    return 0
+  end
+
+  local name = options.name or devrun.container_name(context.cwd, options.image)
+  if devrun.container_exists(context.engine, name, execute) then
+    stderr("devrun: container '" .. name .. "' already exists; choose another --name"
+      .. " or remove it explicitly with "
+      .. devrun.render_command({ context.engine, "rm", name }) .. "\n")
+    return 2
+  end
+  return devrun.execute(command, execute)
 end
 
 if not _G.DEVRUN_TESTING then
-  os.exit(main(arg))
+  os.exit(devrun.run(arg))
 end
 
 return devrun
