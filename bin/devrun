@@ -18,6 +18,13 @@ local function getenv_integer(name, fallback)
   return value
 end
 
+local function account_name(username)
+  if type(username) == "string" and username:match("^[a-z_][a-z0-9_-]*$") then
+    return username
+  end
+  return "devuser"
+end
+
 devrun.config = {
   engine = nil,
   defaults = {
@@ -29,9 +36,10 @@ devrun.config = {
     ssh_port = getenv_integer("DEVRUN_SSH_PORT", 3322),
     rdp_port = getenv_integer("DEVRUN_RDP_PORT", 3389),
   },
-  default_profiles = { "dev" },
+  default_profiles = { "dev", "identity" },
   profiles = {
     dev = function(ctx)
+      local username = account_name(ctx.username or (ctx.identity and ctx.identity.username))
       return {
         interactive = true,
         remove = true,
@@ -45,7 +53,8 @@ devrun.config = {
           { source = ctx.home .. "/.clangd", target = ".clangd", readonly = true },
         },
         workdir = "/workspace",
-        container_home = ctx.home,
+        container_user = username,
+        container_home = "/home/" .. username,
         command = { "/bin/bash" },
         env = {
           TERM = ctx.env.TERM,
@@ -267,6 +276,7 @@ function devrun.resolve_launch(options, config, context)
     resolved.mounts[#resolved.mounts + 1] = {
       source = resolved.home_volume,
       target = resolved.container_home,
+      ownership = true,
     }
   end
   for _, mount in ipairs(resolved.optional_home_mounts or {}) do
@@ -350,13 +360,14 @@ function devrun.build_command(options, launch, context)
     if not identity then
       fail("host identity has not been resolved", 1)
     end
+    local username = launch.container_user or account_name(identity.username)
     local container_home = launch.container_home or context.home
     append(arguments, "--user", identity.uid .. ":" .. identity.gid)
     if engine == "podman" then
       append(arguments, "--userns=keep-id")
       append(arguments, "--passwd-entry",
-        identity.username .. ":x:" .. identity.uid .. ":" .. identity.gid
-          .. ":" .. identity.username .. ":" .. container_home .. ":/bin/bash")
+        username .. ":x:" .. identity.uid .. ":" .. identity.gid
+          .. ":" .. username .. ":" .. container_home .. ":/bin/bash")
     end
   end
 
@@ -369,14 +380,18 @@ function devrun.build_command(options, launch, context)
   end
   for _, mount in ipairs(launch.mounts or {}) do
     local specification = mount.source .. ":" .. mount.target
-    if mount.readonly then specification = specification .. ":ro" end
+    local options = {}
+    if mount.readonly then options[#options + 1] = "ro" end
+    if mount.ownership and engine == "podman" then options[#options + 1] = "U" end
+    if #options > 0 then specification = specification .. ":" .. table.concat(options, ",") end
     append(arguments, "-v", specification)
   end
   local env_keys = {}
   if launch.identity then
     launch.env = launch.env or {}
-    launch.env.USER = context.identity.username
-    launch.env.LOGNAME = context.identity.username
+    local username = launch.container_user or account_name(context.identity.username)
+    launch.env.USER = username
+    launch.env.LOGNAME = username
     launch.env.HOME = launch.container_home or context.home
   end
   for key, value in pairs(launch.env or {}) do
@@ -537,16 +552,22 @@ function devrun.run(arguments, dependencies)
   local context = {
     cwd = dependencies.cwd or current_directory(),
     home = getenv("HOME", ""),
+    username = getenv("USER", nil),
     env = { TERM = os.getenv("TERM") },
     engine = select_engine(options, devrun.config),
   }
+  local selected_profiles = devrun.select_profiles(options, devrun.config)
+  for _, profile in ipairs(selected_profiles) do
+    if profile == "identity" then
+      context.identity = (dependencies.host_identity or host_identity)()
+      context.username = context.identity.username
+      break
+    end
+  end
   local resolved_ok, launch = pcall(devrun.resolve_launch, options, devrun.config, context)
   if not resolved_ok then
     stderr("devrun: " .. tostring(launch) .. "\n")
     return 2
-  end
-  if launch.identity then
-    context.identity = (dependencies.host_identity or host_identity)()
   end
   devrun.filter_optional_mounts(
     launch,

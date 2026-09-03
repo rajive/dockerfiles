@@ -3,8 +3,8 @@
 ## Status
 
 Accepted. Implementation is in progress; the core CLI, runnable development,
-identity, Connext runtime, GUI runtime, and Make migration slices are
-implemented.
+identity, Connext runtime, GUI runtime, Make migration, and workspace ownership
+verification slices are implemented.
 
 ## Problem
 
@@ -152,7 +152,8 @@ Profiles are selected according to these rules:
 1. If the CLI supplies one or more `--profile` options, use those profiles in
    CLI order.
 2. Otherwise, use the profiles from the first matching image rule.
-3. If no image rule matches, use `default_profiles`.
+3. If no image rule matches, use `default_profiles`, initially `dev` and
+   `identity`.
 
 Explicit CLI profiles replace automatic image profiles; they do not append to
 them.
@@ -198,8 +199,14 @@ The profile does not mount the entire host home or `~/.config`.
 
 ### `identity`
 
-The `identity` profile maps the host user's identity into compatible images.
-It is opt-in because arbitrary images may require their declared user.
+The `identity` profile maps the host user's numeric identity into compatible
+images. It is selected by default for unknown development images but can be
+omitted explicitly because arbitrary images may require their declared user.
+
+Generic development uses the validated host username with a conventional
+`/home/<username>` container home. Invalid account names fall back to
+`devuser`. Known image mappings retain their established account names and
+homes, such as `rtiuser` and `/home/rtiuser` for Connext SDK images.
 
 It may configure:
 
@@ -294,6 +301,8 @@ devrun
 The image mapping must declare the container home where the volume is mounted.
 Sharing the volume preserves Neovim plugins, caches, and shell state across
 ephemeral launches and image upgrades.
+Podman adjusts ownership of this named volume for the active mapped user. This
+does not alter ownership of the bind-mounted workspace.
 
 This intentionally assumes compatible home contents across mapped development
 images.

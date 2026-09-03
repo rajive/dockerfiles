@@ -100,7 +100,7 @@ test("image profiles precede defaults", function()
     { image = "ubuntu:24.04", profiles = {} },
     devrun.config
   )
-  list_equal(profiles, { "dev" })
+  list_equal(profiles, { "dev", "identity" })
 end)
 
 test("registry-qualified upstream images select their profiles", function()
@@ -165,7 +165,9 @@ test("render minimal dev command", function()
   local context = {
     cwd = "/tmp/My Project",
     home = "/home/test",
+    username = "testuser",
     env = { TERM = "xterm-256color" },
+    identity = { uid = "1001", gid = "1002", username = "testuser" },
   }
   local launch = devrun.resolve_launch(options, devrun.config, context)
   local command = devrun.build_command(options, launch, context)
@@ -175,7 +177,7 @@ test("render minimal dev command", function()
   contains(command, "--rm")
   contains(command, "-it")
   contains(command, "/tmp/My Project:/workspace")
-  contains(command, "devrun:/home/test")
+  contains(command, "devrun:/home/testuser:U")
   contains(command, "/workspace")
   contains(command, "ubuntu:24.04")
   contains(command, "/bin/bash")
@@ -195,10 +197,10 @@ test("dev mounts shared home and existing optional configuration read-only", fun
   end)
   local command = devrun.build_command(options, launch, context)
 
-  contains(command, "devrun:/home/Test User")
-  contains(command, "/home/Test User/.config/nvim:/home/Test User/.config/nvim:ro")
-  contains(command, "/home/Test User/.gitconfig:/home/Test User/.gitconfig:ro")
-  not_contains(command, "/home/Test User/.clangd:/home/Test User/.clangd:ro")
+  contains(command, "devrun:/home/devuser:U")
+  contains(command, "/home/Test User/.config/nvim:/home/devuser/.config/nvim:ro")
+  contains(command, "/home/Test User/.gitconfig:/home/devuser/.gitconfig:ro")
+  not_contains(command, "/home/Test User/.clangd:/home/devuser/.clangd:ro")
   equal(#warnings, 1)
   assert(warnings[1]:match("%.clangd"), warnings[1])
 end)
@@ -267,13 +269,36 @@ test("identity rendering keeps Podman flags out of Docker", function()
   contains(podman, "1001:1002")
   contains(podman, "--userns=keep-id")
   contains(podman, "--passwd-entry")
-  contains(podman, "USER=test user")
-  contains(podman, "HOME=/home/Test User")
+  contains(podman, "USER=devuser")
+  contains(podman, "LOGNAME=devuser")
+  contains(podman, "HOME=/home/devuser")
 
   local docker = identity_command("docker")
   contains(docker, "1001:1002")
+  contains(docker, "devrun:/home/devuser")
+  not_contains(docker, "devrun:/home/devuser:U")
   not_contains(docker, "--userns=keep-id")
   not_contains(docker, "--passwd-entry")
+end)
+
+test("known images preserve their container account policy", function()
+  local rti_options = devrun.parse_args({
+    "docker.io/rajive7400/connext-sdk-dev:7.7.0", "--engine", "podman", "--dry-run",
+  })
+  local rti_context = fake_context("podman")
+  local rti_launch = devrun.resolve_launch(rti_options, devrun.config, rti_context)
+  local rti_command = devrun.build_command(rti_options, rti_launch, rti_context)
+
+  contains(rti_command, "USER=rtiuser")
+  contains(rti_command, "HOME=/home/rtiuser")
+  contains(rti_command, "rtiuser:x:1001:1002:rtiuser:/home/rtiuser:/bin/bash")
+
+  local gui_options = devrun.parse_args({
+    "docker.io/rajive7400/connext-tools:7.7.0", "--engine", "podman", "--dry-run",
+  })
+  local gui_launch = devrun.resolve_launch(gui_options, devrun.config, fake_context("podman"))
+  equal(gui_launch.container_home, "/home/user")
+  equal(gui_launch.identity, nil)
 end)
 
 test("GUI rendering is portable and preserves the image default command", function()
