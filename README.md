@@ -94,8 +94,8 @@ Known mappings are:
 | Image                                                              | Profiles                     | Container home policy |
 | ------------------------------------------------------------------ | ---------------------------- | --------------------- |
 | `docker.io/rticom/connext-sdk:<tag>` or `rticom/connext-sdk:<tag>` | `dev`, `identity`, `connext` | `/home/devuser`       |
-| Any image containing `connext-sdk-dev:<tag>`                       | `dev`, `identity`, `connext` | `/home/devuser`       |
-| Any image containing `connext-tools:<tag>`                         | `gui`, `connext`             | `/home/user`          |
+| Any image whose repository path ends in `connext-sdk-dev`          | `dev`, `identity`, `connext` | `/home/devuser`       |
+| Any image whose repository path ends in `connext-tools`            | `gui`, `connext`             | `/home/user`          |
 | `docker.io/hectorm/xubuntu:<tag>` or `hectorm/xubuntu:<tag>`       | `gui`                        | Image default         |
 
 The `dev` profile mounts one named volume, `devrun`, at the canonical container

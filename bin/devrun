@@ -110,23 +110,24 @@ devrun.config = {
     end,
   },
   images = {
+    -- The left frontier means start of string or immediately after "/".
     {
-      pattern = "%f[%w]rticom/connext%-sdk%f[:@%z]",
+      pattern = "%f[^/%z]rticom/connext%-sdk%f[:@%z]",
       profiles = { "dev", "identity", "connext" },
       overrides = {},
     },
     {
-      pattern = "%f[%w]connext%-sdk%-dev%f[:@%z]",
+      pattern = "%f[^/%z]connext%-sdk%-dev%f[:@%z]",
       profiles = { "dev", "identity", "connext" },
       overrides = {},
     },
     {
-      pattern = "%f[%w]connext%-tools%f[:@%z]",
+      pattern = "%f[^/%z]connext%-tools%f[:@%z]",
       profiles = { "gui", "connext" },
       overrides = { container_home = "/home/user" },
     },
     {
-      pattern = "%f[%w]hectorm/xubuntu%f[:@%z]",
+      pattern = "%f[^/%z]hectorm/xubuntu%f[:@%z]",
       profiles = { "gui" },
       overrides = {},
     },

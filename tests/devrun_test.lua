@@ -106,7 +106,9 @@ end)
 test("optional registry prefixes do not change upstream image profiles", function()
   for _, image in ipairs({
     "rticom/connext-sdk:7.7.0",
+    "rticom/connext-sdk@sha256:0123456789abcdef",
     "docker.io/rticom/connext-sdk:7.7.0",
+    "registry.example:5000/team/rticom/connext-sdk",
   }) do
     local profiles = devrun.select_profiles({ image = image, profiles = {} }, devrun.config)
     list_equal(profiles, { "dev", "identity", "connext" }, image)
@@ -115,6 +117,7 @@ test("optional registry prefixes do not change upstream image profiles", functio
   for _, image in ipairs({
     "hectorm/xubuntu:latest",
     "docker.io/hectorm/xubuntu:latest",
+    "registry.example:5000/team/hectorm/xubuntu@sha256:0123456789abcdef",
   }) do
     local profiles = devrun.select_profiles({ image = image, profiles = {} }, devrun.config)
     list_equal(profiles, { "gui" }, image)
@@ -123,18 +126,22 @@ end)
 
 test("optional registry and namespace prefixes do not change custom image profiles", function()
   for _, image in ipairs({
+    "connext-sdk-dev",
     "connext-sdk-dev:7.7.0",
-    "rajive7400/connext-sdk-dev:7.7.0",
+    "rajive7400/connext-sdk-dev@sha256:0123456789abcdef",
     "docker.io/rajive7400/connext-sdk-dev:7.7.0",
+    "registry.example:5000/team/project/connext-sdk-dev",
   }) do
     local profiles = devrun.select_profiles({ image = image, profiles = {} }, devrun.config)
     list_equal(profiles, { "dev", "identity", "connext" }, image)
   end
 
   for _, image in ipairs({
+    "connext-tools",
     "connext-tools:7.7.0",
-    "rajive7400/connext-tools:7.7.0",
+    "rajive7400/connext-tools@sha256:0123456789abcdef",
     "docker.io/rajive7400/connext-tools:7.7.0",
+    "registry.example:5000/team/project/connext-tools",
   }) do
     local profiles = devrun.select_profiles({ image = image, profiles = {} }, devrun.config)
     list_equal(profiles, { "gui", "connext" }, image)
@@ -144,9 +151,19 @@ end)
 test("image suffix rules preserve name boundaries", function()
   for _, image in ipairs({
     "notrticom/connext-sdk:7.7.0",
+    "not-rticom/connext-sdk:7.7.0",
+    "registry.example:5000/team/not-rticom/connext-sdk:7.7.0",
+    "rticom/connext-sdk-extra:7.7.0",
     "nothectorm/xubuntu:latest",
+    "not-hectorm/xubuntu:latest",
+    "registry.example:5000/team/not-hectorm/xubuntu:latest",
+    "hectorm/xubuntu-extra:latest",
     "notconnext-sdk-dev:7.7.0",
+    "not-connext-sdk-dev:7.7.0",
+    "foo.connext-sdk-dev@sha256:0123456789abcdef",
     "notconnext-tools:7.7.0",
+    "foo-connext-tools:7.7.0",
+    "registry.example:5000/team/foo.connext-tools",
   }) do
     local profiles = devrun.select_profiles({ image = image, profiles = {} }, devrun.config)
     list_equal(profiles, { "dev", "identity" }, image)
