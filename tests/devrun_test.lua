@@ -296,26 +296,84 @@ test("render minimal dev command", function()
   contains(command, "/bin/bash")
 end)
 
-test("dev mounts shared home and existing optional configuration read-only", function()
-  local options = devrun.parse_args({
-    "ubuntu:24.04", "-p", "dev", "--engine", "podman", "--dry-run",
-  })
-  local context = fake_context("podman")
-  local launch = devrun.resolve_launch(options, devrun.config, context)
-  local warnings = {}
-  devrun.filter_optional_mounts(launch, function(path)
-    return path ~= "/home/Test User/.clangd"
-  end, function(message)
-    warnings[#warnings + 1] = message
-  end)
-  local command = devrun.build_command(options, launch, context)
+test("dev expands and renders ordered optional home mounts", function()
+  for _, engine in ipairs({ "docker", "podman" }) do
+    local options = devrun.parse_args({
+      "ubuntu:24.04", "-p", "dev", "--engine", engine, "--dry-run",
+    })
+    local context = fake_context(engine)
+    local launch = devrun.resolve_launch(options, devrun.config, context)
+    equal(#launch.optional_mounts, 4)
+    equal(launch.optional_mounts[1].source, "/home/Test User/.config/nvim")
+    equal(launch.optional_mounts[1].target, "/home/devuser/.config/nvim")
+    equal(launch.optional_mounts[1].readonly, true)
+    equal(launch.optional_mounts[4].source,
+      "/home/Test User/.config/nvim/lazy-lock.json")
+    equal(launch.optional_mounts[4].readonly, false)
 
-  contains(command, "devrun:/home/devuser:U")
-  contains(command, "/home/Test User/.config/nvim:/home/devuser/.config/nvim:ro")
-  contains(command, "/home/Test User/.gitconfig:/home/devuser/.gitconfig:ro")
-  not_contains(command, "/home/Test User/.clangd:/home/devuser/.clangd:ro")
-  equal(#warnings, 1)
-  assert(warnings[1]:match("%.clangd"), warnings[1])
+    local warnings = {}
+    devrun.filter_optional_mounts(launch, function(path)
+      return path ~= "/home/Test User/.clangd"
+    end, function(message)
+      warnings[#warnings + 1] = message
+    end)
+    local command = devrun.build_command(options, launch, context)
+    local parent = "/home/Test User/.config/nvim:/home/devuser/.config/nvim:ro"
+    local lock = "/home/Test User/.config/nvim/lazy-lock.json:"
+      .. "/home/devuser/.config/nvim/lazy-lock.json"
+
+    contains(command, parent)
+    contains(command, "/home/Test User/.gitconfig:/home/devuser/.gitconfig:ro")
+    not_contains(command, "/home/Test User/.clangd:/home/devuser/.clangd:ro")
+    contains(command, lock)
+    assert(index_of(command, parent) < index_of(command, lock), engine)
+    equal(#warnings, 1)
+    assert(warnings[1]:match("%.clangd"), warnings[1])
+  end
+end)
+
+test("optional home mounts reject unsafe and malformed paths", function()
+  local invalid = {
+    { path = "/absolute", message = "non%-empty relative path" },
+    { path = "", message = "non%-empty relative path" },
+    { path = "config/./file", message = "path components" },
+    { path = "config/../secret", message = "path components" },
+    { path = 42, message = "relative path string" },
+  }
+  for _, case in ipairs(invalid) do
+    local config = {
+      default_profiles = { "test" },
+      profiles = { test = { optional_home_mounts = { readonly = { case.path } } } },
+    }
+    local ok, err = pcall(devrun.resolve_launch,
+      { image = "image", profiles = {} }, config,
+      { cwd = "/tmp/project", home = "/home/test", env = {} })
+    equal(ok, false)
+    assert(tostring(err):match("optional_home_mounts%.readonly%[1%]"), tostring(err))
+    assert(tostring(err):match(case.message), tostring(err))
+  end
+end)
+
+test("invalid optional home mounts fail before engine side effects", function()
+  local old_profile = devrun.config.profiles.invalidmount
+  devrun.config.profiles.invalidmount = {
+    optional_home_mounts = { writable = { "../escape" } },
+  }
+  local execute_calls, capture_calls = 0, 0
+  local call_ok, status = pcall(devrun.run, {
+    "image", "-p", "invalidmount", "--engine", "docker",
+  }, {
+    cwd = "/tmp/project",
+    stderr = function() end,
+    execute = function() execute_calls = execute_calls + 1 end,
+    capture = function() capture_calls = capture_calls + 1 end,
+  })
+  devrun.config.profiles.invalidmount = old_profile
+
+  equal(call_ok, true)
+  equal(status, 2)
+  equal(execute_calls, 0)
+  equal(capture_calls, 0)
 end)
 
 test("connext mounts an existing license at the versioned SDK path", function()
@@ -957,7 +1015,7 @@ test("explicit generic dev replaces Connext work", function()
   })
 
   equal(status, 0)
-  equal(#path_checks, 3)
+  equal(#path_checks, 4)
   local rendered = joined(output)
   assert(not rendered:match("network"), rendered)
   assert(not rendered:match("rti_license"), rendered)

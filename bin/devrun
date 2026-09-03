@@ -54,9 +54,14 @@ devrun.config = {
         },
         home_volume = ctx.config.defaults.home_volume,
         optional_home_mounts = {
-          { source = ctx.home .. "/.config/nvim", target = ".config/nvim", readonly = true },
-          { source = ctx.home .. "/.gitconfig", target = ".gitconfig", readonly = true },
-          { source = ctx.home .. "/.clangd", target = ".clangd", readonly = true },
+          readonly = {
+            ".config/nvim",
+            ".gitconfig",
+            ".clangd",
+          },
+          writable = {
+            ".config/nvim/lazy-lock.json",
+          },
         },
         workdir = "/workspace",
         container_user = ctx.config.defaults.container_user,
@@ -75,6 +80,22 @@ devrun.config = {
         container_home = ctx.config.defaults.container_home,
       }
     end,
+    gui = function(ctx)
+      return {
+        detached = true,
+        remove = true,
+        mounts = {
+          { source = ctx.cwd, target = "/workspace", relabel = "private" },
+        },
+        workdir = "/workspace",
+        shm_size = "2g",
+        env = { TZ = ctx.config.defaults.timezone },
+        ports = {
+          { host = ctx.config.defaults.ssh_port, container = 3322, protocol = "tcp" },
+          { host = ctx.config.defaults.rdp_port, container = 3389, protocol = "tcp" },
+        },
+      }
+    end,
     connext = function(ctx)
       local version = ctx.config.defaults.connext_version
       local license_file = ctx.config.defaults.license_file
@@ -89,22 +110,6 @@ devrun.config = {
             missing_message = "RTI license file does not exist; continuing without mount: "
               .. license_file,
           },
-        },
-      }
-    end,
-    gui = function(ctx)
-      return {
-        detached = true,
-        remove = true,
-        mounts = {
-          { source = ctx.cwd, target = "/workspace", relabel = "private" },
-        },
-        workdir = "/workspace",
-        shm_size = "2g",
-        env = { TZ = ctx.config.defaults.timezone },
-        ports = {
-          { host = ctx.config.defaults.ssh_port, container = 3322, protocol = "tcp" },
-          { host = ctx.config.defaults.rdp_port, container = 3389, protocol = "tcp" },
         },
       }
     end,
@@ -313,13 +318,27 @@ function devrun.resolve_launch(options, config, context)
       ownership = true,
     } })
   end
-  for _, mount in ipairs(resolved.optional_home_mounts or {}) do
-    resolved.optional_mounts = resolved.optional_mounts or {}
-    resolved.optional_mounts[#resolved.optional_mounts + 1] = {
-      source = mount.source,
-      target = resolved.container_home and (resolved.container_home .. "/" .. mount.target),
-      readonly = mount.readonly,
-    }
+  for _, group in ipairs({ "readonly", "writable" }) do
+    for index, path in ipairs((resolved.optional_home_mounts or {})[group] or {}) do
+      local description = "optional_home_mounts." .. group .. "[" .. index .. "]"
+      if type(path) ~= "string" then
+        fail(description .. " must be a relative path string", 1)
+      end
+      if path == "" or path:sub(1, 1) == "/" then
+        fail(description .. " must be a non-empty relative path", 1)
+      end
+      for component in path:gmatch("[^/]+") do
+        if component == "." or component == ".." then
+          fail(description .. " must not contain '.' or '..' path components", 1)
+        end
+      end
+      resolved.optional_mounts = resolved.optional_mounts or {}
+      resolved.optional_mounts[#resolved.optional_mounts + 1] = {
+        source = context.home .. "/" .. path,
+        target = resolved.container_home and (resolved.container_home .. "/" .. path),
+        readonly = group == "readonly",
+      }
+    end
   end
   resolved.profiles = profiles
   return resolved

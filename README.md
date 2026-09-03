@@ -32,8 +32,10 @@ that entry. Development launches consistently use `devuser` and
 relabels the workspace bind mount for SELinux.
 
 Existing `~/.config/nvim`, `~/.gitconfig`, and `~/.clangd` paths are mounted
-read-only. Missing paths are skipped with warnings. The launcher does not
-search for a repository root or mount the rest of the host home.
+read-only. `~/.config/nvim/lazy-lock.json` is mounted afterward as writable,
+overriding that nested location so Neovim can update its lock file. Missing
+paths are skipped with warnings. The launcher does not search for a repository
+root or mount the rest of the host home.
 
 ## Command Line
 
@@ -69,8 +71,7 @@ defaults to `podman`.
 Built-in profiles are:
 
 - `dev`: interactive TTY, `--rm`, `/workspace`, Bash, terminal/timezone
-  environment, optional read-only development config, and the shared home
-  volume.
+  environment, optional development config, and the shared home volume.
 - `identity`: host numeric UID/GID, `USER`, `LOGNAME`, and `HOME`; also
   Podman's keep-id user namespace and passwd entry.
 - `connext`: configured bridge network plus an optional read-only RTI license
@@ -116,6 +117,28 @@ startup, `devrun` prints the container name and both endpoints.
 Configuration is an embedded Lua table near the top of `bin/devrun`; there is
 no external or per-project config file. Edit that table to change defaults,
 profiles, mappings, or image overrides.
+
+Optional host-home mounts use compact relative paths:
+
+```lua
+optional_home_mounts = {
+  readonly = {
+    ".config/nvim",
+    ".gitconfig",
+    ".clangd",
+  },
+  writable = {
+    ".config/nvim/lazy-lock.json",
+  },
+}
+```
+
+Each string is resolved relative to both the host home and the profile's
+resolved `container_home`. Absolute, empty, `.`-component, and `..`-component
+paths are rejected. Read-only mounts are emitted first, followed by writable
+mounts. The nested writable `lazy-lock.json` mount intentionally follows the
+read-only `.config/nvim` mount so only that file can be changed. Any source
+path that does not exist is skipped with a warning.
 
 The launcher reads:
 

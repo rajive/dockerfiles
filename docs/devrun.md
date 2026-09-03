@@ -194,7 +194,27 @@ It:
 
 Initial allowlisted paths may include Neovim configuration, Git configuration,
 and clangd configuration.
-They should be read-only unless writing is required.
+They use a compact schema of paths relative to both the host home and the
+resolved container home:
+
+```lua
+optional_home_mounts = {
+  readonly = {
+    ".config/nvim",
+    ".gitconfig",
+    ".clangd",
+  },
+  writable = {
+    ".config/nvim/lazy-lock.json",
+  },
+}
+```
+
+Absolute paths, empty paths, `.` path components, `..` path components, and
+non-string entries are configuration errors. Read-only entries are emitted
+before writable entries. The writable nested `lazy-lock.json` mount is an
+intentional exception: it follows the read-only `.config/nvim` parent mount so
+Neovim can update only its lock file.
 The launcher skips a missing optional path and prints a warning rather than
 allowing the container engine to create a directory in its place.
 
