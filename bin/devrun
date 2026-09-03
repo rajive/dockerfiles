@@ -30,15 +30,18 @@ end
 devrun.config = {
   engine = nil,
   defaults = {
-    connext_version = getenv("CONNEXT_VERSION", "7.7.0"),
-    network = getenv("MY_NET", "my-net"),
-    license_file = getenv("RTI_LICENSE_FILE", getenv("HOME", "") .. "/rti/licenses/rti_license.dat"),
-    timezone = getenv("TZ", "America/Los_Angeles"),
     home_volume = "devrun",
     container_user = "devuser",
     container_home = "/home/devuser",
-    ssh_port = getenv_integer("DEVRUN_SSH_PORT", 3322),
-    rdp_port = getenv_integer("DEVRUN_RDP_PORT", 3389),
+    timezone = getenv("DEVRUN_TIMEZONE", "America/Los_Angeles"),
+    ssh_port = getenv_integer("DEVRUN_SSH_HOST_PORT", 3322),
+    rdp_port = getenv_integer("DEVRUN_RDP_HOST_PORT", 3389),
+    network = getenv("DEVRUN_NETWORK", "my-net"),
+    connext_version = getenv("DEVRUN_CONNEXT_VERSION", "7.7.0"),
+    license_file = getenv(
+      "DEVRUN_RTI_LICENSE_FILE",
+      getenv("HOME", "") .. "/rti/licenses/rti_license.dat"
+    ),
   },
   default_profiles = { "dev", "identity" },
   profiles = {

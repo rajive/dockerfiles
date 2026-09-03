@@ -119,22 +119,23 @@ profiles, mappings, or image overrides.
 
 The launcher reads:
 
-| Variable           | Purpose                            | Default                              |
-| ------------------ | ---------------------------------- | ------------------------------------ |
-| `CONNEXT_VERSION`  | License mount's versioned SDK path | `7.7.0`                              |
-| `MY_NET`           | Connext bridge network             | `my-net`                             |
-| `RTI_LICENSE_FILE` | Optional RTI license source        | `$HOME/rti/licenses/rti_license.dat` |
-| `TZ`               | Container timezone                 | `America/Los_Angeles`                |
-| `DEVRUN_SSH_PORT`  | GUI SSH host port                  | `3322`                               |
-| `DEVRUN_RDP_PORT`  | GUI RDP host port                  | `3389`                               |
+| Variable                        | Purpose                            | Default                              |
+| ------------------------------- | ---------------------------------- | ------------------------------------ |
+| `DEVRUN_CONNEXT_VERSION`        | License mount's versioned SDK path | `7.7.0`                              |
+| `DEVRUN_NETWORK`                | Connext bridge network             | `my-net`                             |
+| `DEVRUN_RTI_LICENSE_FILE`       | Optional RTI license source        | `$HOME/rti/licenses/rti_license.dat` |
+| `DEVRUN_TIMEZONE`               | Container timezone                 | `America/Los_Angeles`                |
+| `DEVRUN_SSH_HOST_PORT`          | GUI SSH host port                  | `3322`                               |
+| `DEVRUN_RDP_HOST_PORT`          | GUI RDP host port                  | `3389`                               |
 
 `TERM` is forwarded by `dev`; `HOME` and the host account identity are used to
 construct mounts and identity settings.
 
 The Makefile additionally exposes `CONTAINER_ENGINE`, `MY_DOCKER_HUB_ID`, and
 the four image variables `CONNEXT_SDK_IMAGE`, `CONNEXT_SDK_DEV_IMAGE`,
-`CONNEXT_TOOLS_IMAGE`, and `XUBUNTU_IMAGE`. It passes `CONNEXT_VERSION`,
-`MY_NET`, `RTI_LICENSE_FILE`, and `TZ` to the applicable launcher aliases.
+`CONNEXT_TOOLS_IMAGE`, and `XUBUNTU_IMAGE`. It translates its existing
+`CONNEXT_VERSION`, `MY_NET`, `RTI_LICENSE_FILE`, and `TZ` settings into the
+corresponding `DEVRUN_*` variables for launcher aliases.
 
 ## Make Targets
 

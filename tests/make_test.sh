@@ -22,6 +22,9 @@ assert_contains() {
 
 for target in connext-sdk connext-sdk.sample; do
 	output=$(dry_run "$target")
+	assert_contains "$output" 'DEVRUN_CONNEXT_VERSION="9.9.9" DEVRUN_NETWORK="my-net"'
+	assert_contains "$output" 'DEVRUN_RTI_LICENSE_FILE="'"$HOME"'/rti/licenses/rti_license.dat"'
+	assert_contains "$output" 'DEVRUN_TIMEZONE="America/Los_Angeles"'
 	assert_contains "$output" './bin/devrun "docker.io/rticom/connext-sdk:9.9.9" --engine "docker" --name "'"$target"'"'
 done
 
@@ -34,6 +37,7 @@ output=$(dry_run connext-tools)
 assert_contains "$output" './bin/devrun "docker.io/tester/connext-tools:9.9.9" --engine "docker" --name "connext-tools"'
 
 output=$(dry_run xubuntu)
+assert_contains "$output" 'DEVRUN_TIMEZONE="America/Los_Angeles"'
 assert_contains "$output" './bin/devrun "docker.io/hectorm/xubuntu:latest"'
 assert_contains "$output" '--engine "docker" --name "xubuntu"'
 

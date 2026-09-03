@@ -208,14 +208,16 @@ sub sub.%: ensure-network
 
 # Connext SDK
 connext-sdk connext-sdk.%:
-	CONNEXT_VERSION="${CONNEXT_VERSION}" MY_NET="${MY_NET}" \
-	RTI_LICENSE_FILE="${DEVRUN_RTI_LICENSE_FILE}" TZ="${TZ}" \
+	DEVRUN_CONNEXT_VERSION="${CONNEXT_VERSION}" DEVRUN_NETWORK="${MY_NET}" \
+	DEVRUN_RTI_LICENSE_FILE="${DEVRUN_RTI_LICENSE_FILE}" \
+	DEVRUN_TIMEZONE="${TZ}" \
 	./bin/devrun "${CONNEXT_SDK_IMAGE}" --engine "${CONTAINER_ENGINE}" --name "$@"
 
 # Connext SDK with Dev Env and Tools:
 connext-sdk-dev connext-sdk-dev.%:
-	CONNEXT_VERSION="${CONNEXT_VERSION}" MY_NET="${MY_NET}" \
-	RTI_LICENSE_FILE="${DEVRUN_RTI_LICENSE_FILE}" TZ="${TZ}" \
+	DEVRUN_CONNEXT_VERSION="${CONNEXT_VERSION}" DEVRUN_NETWORK="${MY_NET}" \
+	DEVRUN_RTI_LICENSE_FILE="${DEVRUN_RTI_LICENSE_FILE}" \
+	DEVRUN_TIMEZONE="${TZ}" \
 	./bin/devrun "${CONNEXT_SDK_DEV_IMAGE}" --engine "${CONTAINER_ENGINE}" --name "$@"
 
 # Remote Desktop (GUI)
@@ -226,12 +228,13 @@ connext-sdk-dev connext-sdk-dev.%:
 #          --device /dev/dri:/dev/dri \
 # https://github.com/hectorm/docker-xubuntu
 xubuntu:
-	TZ="${TZ}" ./bin/devrun "${XUBUNTU_IMAGE}" \
+	DEVRUN_TIMEZONE="${TZ}" ./bin/devrun "${XUBUNTU_IMAGE}" \
 		--engine "${CONTAINER_ENGINE}" --name "$@"
 
 connext-tools:
-	CONNEXT_VERSION="${CONNEXT_VERSION}" MY_NET="${MY_NET}" \
-	RTI_LICENSE_FILE="${DEVRUN_RTI_LICENSE_FILE}" TZ="${TZ}" \
+	DEVRUN_CONNEXT_VERSION="${CONNEXT_VERSION}" DEVRUN_NETWORK="${MY_NET}" \
+	DEVRUN_RTI_LICENSE_FILE="${DEVRUN_RTI_LICENSE_FILE}" \
+	DEVRUN_TIMEZONE="${TZ}" \
 	./bin/devrun "${CONNEXT_TOOLS_IMAGE}" --engine "${CONTAINER_ENGINE}" --name "$@"
 
 # Utilities

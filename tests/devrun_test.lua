@@ -502,8 +502,8 @@ test("GUI environment-backed port defaults retain valid integers", function()
     return value
   end
 
-  equal(devrun.config.defaults.ssh_port, expected("DEVRUN_SSH_PORT", 3322))
-  equal(devrun.config.defaults.rdp_port, expected("DEVRUN_RDP_PORT", 3389))
+  equal(devrun.config.defaults.ssh_port, expected("DEVRUN_SSH_HOST_PORT", 3322))
+  equal(devrun.config.defaults.rdp_port, expected("DEVRUN_RDP_HOST_PORT", 3389))
 end)
 
 test("GUI rejects invalid port configuration", function()

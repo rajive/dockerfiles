@@ -230,13 +230,15 @@ The `connext` profile contains RTI-specific runtime policy rather than coupling
 it to generic development or GUI behavior.
 It:
 
-- Resolves the Connext version from `CONNEXT_VERSION`, with a table fallback.
-- Resolves a network from `MY_NET`, with a table fallback.
+- Resolves the Connext version from `DEVRUN_CONNEXT_VERSION`, with a table
+  fallback.
+- Resolves a network from `DEVRUN_NETWORK`, with a table fallback.
 - Ensures that the configured bridge network exists before launch.
 - Joins the container to that network.
 - Optionally mounts the RTI license read-only at the versioned SDK location.
 
-The license source resolves from `RTI_LICENSE_FILE`, with a table fallback.
+The license source resolves from `DEVRUN_RTI_LICENSE_FILE`, with a table
+fallback.
 If the file is absent, the launcher warns and continues so another licensing
 mechanism can be used.
 
