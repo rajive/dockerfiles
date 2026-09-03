@@ -119,6 +119,7 @@ home
 uid
 gid
 username
+host_identity
 environment (`env` is an alias)
 engine
 image
@@ -135,7 +136,7 @@ Profiles use typed fields for common behavior, including:
 - Environment variables.
 - Ports.
 - Network selection and creation.
-- User identity.
+- Host numeric-identity mapping.
 - Interactive or detached lifecycle.
 - Working directory.
 - Shared memory size.
@@ -204,6 +205,8 @@ The profile does not mount the entire host home or `~/.config`.
 The `identity` profile maps the host user's numeric identity into compatible
 images. It is selected by default for unknown development images but can be
 omitted explicitly because arbitrary images may require their declared user.
+Internally, the profile requests `map_host_identity`; resolved host account
+data is exposed separately as `host_identity` in the profile context.
 
 Development launches use the canonical account `devuser` and home
 `/home/devuser`, independent of the host account and image. The numeric UID and
@@ -305,6 +308,9 @@ launches and image upgrades without creating per-host or per-image home
 directories.
 Podman adjusts ownership of this named volume for the active mapped user. This
 does not alter ownership of the bind-mounted workspace.
+Docker shared-home ownership requires runtime verification and an explicit
+initialization policy before writable persistent-home behavior can be
+guaranteed for a host-mapped numeric user.
 
 This intentionally assumes compatible home contents across mapped development
 images.
@@ -424,5 +430,6 @@ images or requiring an RTI license.
 - Trust handling for executable project configuration.
 - Additional GUI modes such as X11 or Wayland forwarding.
 - Automatic host-port allocation.
+- Docker named-volume ownership initialization and integration testing.
 - Packaging or independent releases.
 - Extraction into a separate repository.

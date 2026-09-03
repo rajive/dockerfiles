@@ -103,6 +103,10 @@ home `/home/devuser`. Podman requests ownership adjustment for this volume. GUI
 mappings do not use the `dev` profile, so they preserve image account policy
 and do not mount the shared home volume.
 
+Docker does not have an equivalent to Podman's volume ownership adjustment.
+Writable shared-home behavior for Docker remains unverified; use Podman for
+development launches that must persist state under `/home/devuser`.
+
 GUI launches return after startup. SSH defaults to `localhost:3322` and RDP to
 `localhost:3389`, targeting container ports 3322 and 3389. On successful
 startup, `devrun` prints the container name and both endpoints.

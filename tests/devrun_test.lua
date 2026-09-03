@@ -58,7 +58,7 @@ local function fake_context(engine)
     home = "/home/Test User",
     env = { TERM = "xterm-256color" },
     engine = engine,
-    identity = { uid = "1001", gid = "1002", username = "test user" },
+    host_identity = { uid = "1001", gid = "1002", username = "test user" },
   }
 end
 
@@ -263,7 +263,7 @@ test("render minimal dev command", function()
     home = "/home/test",
     username = "testuser",
     env = { TERM = "xterm-256color" },
-    identity = { uid = "1001", gid = "1002", username = "testuser" },
+    host_identity = { uid = "1001", gid = "1002", username = "testuser" },
   }
   local launch = devrun.resolve_launch(options, devrun.config, context)
   local command = devrun.build_command(options, launch, context)
@@ -394,7 +394,7 @@ test("development images share canonical account while GUI preserves image polic
   })
   local gui_launch = devrun.resolve_launch(gui_options, devrun.config, fake_context("podman"))
   equal(gui_launch.container_home, "/home/user")
-  equal(gui_launch.identity, nil)
+  equal(gui_launch.map_host_identity, nil)
 end)
 
 test("GUI rendering is portable and preserves the image default command", function()
@@ -657,12 +657,45 @@ test("run resolves host identity only for identity profile", function()
   equal(identity_calls, 0)
 end)
 
+test("custom identity profile resolves host identity", function()
+  local identity_calls = 0
+  local observed
+  local old_identity_profile = devrun.config.profiles.customidentity
+  local old_observer_profile = devrun.config.profiles.observeidentity
+  devrun.config.profiles.customidentity = { map_host_identity = true }
+  devrun.config.profiles.observeidentity = function(ctx)
+    observed = { uid = ctx.uid, gid = ctx.gid, username = ctx.username }
+    return {}
+  end
+  local status = devrun.run({
+    "ubuntu:24.04", "-p", "dev", "-p", "customidentity", "-p", "observeidentity",
+    "--engine", "docker", "--dry-run",
+  }, {
+    cwd = "/tmp/project",
+    host_identity = function()
+      identity_calls = identity_calls + 1
+      return { uid = "1001", gid = "1002", username = "tester" }
+    end,
+    path_exists = function() return false end,
+    stdout = function() end,
+    stderr = function() end,
+  })
+  devrun.config.profiles.customidentity = old_identity_profile
+  devrun.config.profiles.observeidentity = old_observer_profile
+
+  equal(status, 0)
+  equal(identity_calls, 1)
+  equal(observed.uid, "1001")
+  equal(observed.gid, "1002")
+  equal(observed.username, "tester")
+end)
+
 test("profile context exposes direct host identity fields", function()
   local observed
   local old_profile = devrun.config.profiles.observeidentity
   devrun.config.profiles.observeidentity = function(ctx)
     observed = { uid = ctx.uid, gid = ctx.gid, username = ctx.username }
-    return { identity = true }
+    return { map_host_identity = true }
   end
   local status = devrun.run({
     "ubuntu:24.04", "-p", "identity", "-p", "observeidentity",

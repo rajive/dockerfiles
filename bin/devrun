@@ -67,7 +67,7 @@ devrun.config = {
     end,
     identity = function(ctx)
       return {
-        identity = true,
+        map_host_identity = true,
         container_user = ctx.config.defaults.container_user,
         container_home = ctx.config.defaults.container_home,
       }
@@ -280,6 +280,11 @@ function devrun.resolve_profiles(names, config, context)
       profile = profile(context)
     end
     merge(resolved, profile)
+    if resolved.map_host_identity
+        and not context.host_identity
+        and context.resolve_host_identity then
+      context.resolve_host_identity()
+    end
   end
   return resolved
 end
@@ -382,20 +387,20 @@ function devrun.build_command(options, launch, context)
   if launch.detached then append(arguments, "-d") end
   append(arguments, "--name", options.name or devrun.container_name(context.cwd, options.image))
 
-  if launch.identity then
-    local identity = context.identity
-    if not identity then
+  if launch.map_host_identity then
+    local host_identity = context.host_identity
+    if not host_identity then
       fail("host identity has not been resolved", 1)
     end
-    local username = launch.container_user or account_name(identity.username)
+    local username = launch.container_user or account_name(host_identity.username)
     local container_home = launch.container_home or context.home
-    append(arguments, "--user", identity.uid .. ":" .. identity.gid)
+    append(arguments, "--user", host_identity.uid .. ":" .. host_identity.gid)
     -- Podman can map the host IDs into a user namespace and synthesize passwd
     -- metadata. Docker's portable equivalent is only the numeric --user pair.
     if engine == "podman" then
       append(arguments, "--userns=keep-id")
       append(arguments, "--passwd-entry",
-        username .. ":x:" .. identity.uid .. ":" .. identity.gid
+        username .. ":x:" .. host_identity.uid .. ":" .. host_identity.gid
           .. ":" .. username .. ":" .. container_home .. ":/bin/bash")
     end
   end
@@ -420,9 +425,9 @@ function devrun.build_command(options, launch, context)
     append(arguments, "-v", specification)
   end
   local env_keys = {}
-  if launch.identity then
+  if launch.map_host_identity then
     launch.env = launch.env or {}
-    local username = launch.container_user or account_name(context.identity.username)
+    local username = launch.container_user or account_name(context.host_identity.username)
     launch.env.USER = username
     launch.env.LOGNAME = username
     launch.env.HOME = launch.container_home or context.home
@@ -595,17 +600,13 @@ function devrun.run(arguments, dependencies)
     engine = select_engine(options, devrun.config),
   }
   context.environment = context.env
-  local selected_profiles = devrun.select_profiles(options, devrun.config)
-  -- Host identity is queried lazily because profiles such as GUI intentionally
-  -- preserve the image's declared user instead of imposing the host account.
-  for _, profile in ipairs(selected_profiles) do
-    if profile == "identity" then
-      context.identity = (dependencies.host_identity or host_identity)()
-      context.username = context.identity.username
-      context.uid = context.identity.uid
-      context.gid = context.identity.gid
-      break
-    end
+  -- Resolve identity when profile intent requests it, regardless of the
+  -- profile's name. Profiles applied afterward can consume the direct fields.
+  context.resolve_host_identity = function()
+    context.host_identity = (dependencies.host_identity or host_identity)()
+    context.username = context.host_identity.username
+    context.uid = context.host_identity.uid
+    context.gid = context.host_identity.gid
   end
   local resolved_ok, launch = pcall(devrun.resolve_launch, options, devrun.config, context)
   if not resolved_ok then
