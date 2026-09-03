@@ -44,7 +44,7 @@ devrun.config = {
         interactive = true,
         remove = true,
         mounts = {
-          { source = ctx.cwd, target = "/workspace" },
+          { source = ctx.cwd, target = "/workspace", relabel = "private" },
         },
         home_volume = ctx.config.defaults.home_volume,
         optional_home_mounts = {
@@ -87,7 +87,7 @@ devrun.config = {
         detached = true,
         remove = true,
         mounts = {
-          { source = ctx.cwd, target = "/workspace" },
+          { source = ctx.cwd, target = "/workspace", relabel = "private" },
         },
         workdir = "/workspace",
         shm_size = "2g",
@@ -228,9 +228,28 @@ local list_fields = {
 
 local keyed_fields = { env = true }
 
+local function append_mounts(target, mounts)
+  target.mounts = target.mounts or {}
+  for _, mount in ipairs(mounts) do
+    local replaced = false
+    if mount.target then
+      for index, existing in ipairs(target.mounts) do
+        if existing.target == mount.target then
+          target.mounts[index] = mount
+          replaced = true
+          break
+        end
+      end
+    end
+    if not replaced then target.mounts[#target.mounts + 1] = mount end
+  end
+end
+
 local function merge(target, source)
   for key, value in pairs(source or {}) do
-    if list_fields[key] then
+    if key == "mounts" then
+      append_mounts(target, value)
+    elseif list_fields[key] then
       target[key] = target[key] or {}
       for _, item in ipairs(value) do
         target[key][#target[key] + 1] = item
@@ -272,12 +291,11 @@ function devrun.resolve_launch(options, config, context)
     merge(resolved, mapping.overrides)
   end
   if resolved.home_volume and resolved.container_home then
-    resolved.mounts = resolved.mounts or {}
-    resolved.mounts[#resolved.mounts + 1] = {
+    append_mounts(resolved, { {
       source = resolved.home_volume,
       target = resolved.container_home,
       ownership = true,
-    }
+    } })
   end
   for _, mount in ipairs(resolved.optional_home_mounts or {}) do
     resolved.optional_mounts = resolved.optional_mounts or {}
@@ -383,6 +401,8 @@ function devrun.build_command(options, launch, context)
     local options = {}
     if mount.readonly then options[#options + 1] = "ro" end
     if mount.ownership and engine == "podman" then options[#options + 1] = "U" end
+    if mount.relabel == "private" and engine == "podman" then options[#options + 1] = "Z" end
+    if mount.relabel == "shared" and engine == "podman" then options[#options + 1] = "z" end
     if #options > 0 then specification = specification .. ":" .. table.concat(options, ",") end
     append(arguments, "-v", specification)
   end
@@ -418,8 +438,7 @@ end
 function devrun.filter_optional_mounts(launch, path_exists, warn)
   for _, mount in ipairs(launch.optional_mounts or {}) do
     if mount.target and path_exists(mount.source) then
-      launch.mounts = launch.mounts or {}
-      launch.mounts[#launch.mounts + 1] = mount
+      append_mounts(launch, { mount })
     else
       warn(mount.missing_message or ("optional host path does not exist; skipping " .. mount.source))
     end
@@ -556,11 +575,14 @@ function devrun.run(arguments, dependencies)
     env = { TERM = os.getenv("TERM") },
     engine = select_engine(options, devrun.config),
   }
+  context.environment = context.env
   local selected_profiles = devrun.select_profiles(options, devrun.config)
   for _, profile in ipairs(selected_profiles) do
     if profile == "identity" then
       context.identity = (dependencies.host_identity or host_identity)()
       context.username = context.identity.username
+      context.uid = context.identity.uid
+      context.gid = context.identity.gid
       break
     end
   end

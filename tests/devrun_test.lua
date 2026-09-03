@@ -132,6 +132,32 @@ test("later profiles override scalars and append lists", function()
   equal(merged.env.B, "3")
 end)
 
+test("later profile mount replaces the same target", function()
+  local config = {
+    profiles = {
+      first = { mounts = { { source = "/one", target = "/workspace" } } },
+      second = { mounts = { { source = "/two", target = "/workspace", readonly = true } } },
+    },
+  }
+  local merged = devrun.resolve_profiles({ "first", "second" }, config, {})
+
+  equal(#merged.mounts, 1)
+  equal(merged.mounts[1].source, "/two")
+  equal(merged.mounts[1].readonly, true)
+end)
+
+test("exact image mappings are supported", function()
+  local config = {
+    default_profiles = { "dev" },
+    profiles = { dev = {}, gui = {} },
+    images = { { exact = "example/image:1", profiles = { "gui" } } },
+  }
+  local profiles = devrun.select_profiles(
+    { image = "example/image:1", profiles = {} }, config
+  )
+  list_equal(profiles, { "gui" })
+end)
+
 test("image mapping overrides profiles", function()
   local resolved = devrun.resolve_launch(
     { image = "rticom/connext-sdk:7.7.0", profiles = {} },
@@ -176,7 +202,7 @@ test("render minimal dev command", function()
   contains(command, "run")
   contains(command, "--rm")
   contains(command, "-it")
-  contains(command, "/tmp/My Project:/workspace")
+  contains(command, "/tmp/My Project:/workspace:Z")
   contains(command, "devrun:/home/testuser:U")
   contains(command, "/workspace")
   contains(command, "ubuntu:24.04")
@@ -314,9 +340,14 @@ test("GUI rendering is portable and preserves the image default command", functi
     not_contains(command, "-it")
     local shm = assert(index_of(command, "--shm-size"), "missing --shm-size")
     equal(command[shm + 1], "2g")
-    contains(command, "/tmp/My Project:/workspace")
     local workdir = assert(index_of(command, "-w"), "missing GUI workdir")
     equal(command[workdir + 1], "/workspace")
+    if engine == "podman" then
+      contains(command, "/tmp/My Project:/workspace:Z")
+    else
+      contains(command, "/tmp/My Project:/workspace")
+      not_contains(command, "/tmp/My Project:/workspace:Z")
+    end
     contains(command, "3322:3322/tcp")
     contains(command, "3389:3389/tcp")
     contains(command, "TZ=" .. devrun.config.defaults.timezone)
@@ -554,6 +585,32 @@ test("run resolves host identity only for identity profile", function()
 
   equal(status, 0)
   equal(identity_calls, 0)
+end)
+
+test("profile context exposes direct host identity fields", function()
+  local observed
+  local old_profile = devrun.config.profiles.observeidentity
+  devrun.config.profiles.observeidentity = function(ctx)
+    observed = { uid = ctx.uid, gid = ctx.gid, username = ctx.username }
+    return { identity = true }
+  end
+  local status = devrun.run({
+    "ubuntu:24.04", "-p", "identity", "-p", "observeidentity",
+    "--engine", "docker", "--dry-run",
+  }, {
+    cwd = "/tmp/project",
+    host_identity = function()
+      return { uid = "1001", gid = "1002", username = "tester" }
+    end,
+    stdout = function() end,
+    stderr = function() end,
+  })
+  devrun.config.profiles.observeidentity = old_profile
+
+  equal(status, 0)
+  equal(observed.uid, "1001")
+  equal(observed.gid, "1002")
+  equal(observed.username, "tester")
 end)
 
 test("run refuses to replace an existing named container", function()

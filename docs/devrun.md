@@ -2,9 +2,9 @@
 
 ## Status
 
-Accepted. Implementation is in progress; the core CLI, runnable development,
-identity, Connext runtime, GUI runtime, Make migration, and workspace ownership
-verification slices are implemented.
+Implemented. The CLI, development, identity, Connext runtime, GUI runtime, Make
+integration, workspace ownership, documentation, and acceptance testing are
+complete. Deferred work remains listed below.
 
 ## Problem
 
@@ -119,7 +119,7 @@ home
 uid
 gid
 username
-environment
+environment (`env` is an alias)
 engine
 image
 container user and home
@@ -144,6 +144,8 @@ Profiles use typed fields for common behavior, including:
 A `run_args` array is available as an escape hatch for engine options not yet
 represented by typed fields.
 Each element is one engine argument, not a shell command fragment.
+Mounts may request private or shared SELinux relabeling; the Podman adapter
+renders those requests as `Z` or `z` mount options.
 
 ## Profile Selection
 
