@@ -621,7 +621,10 @@ function devrun.run(arguments, dependencies)
     dependencies.path_exists or path_exists,
     function(message) stderr("devrun: warning: " .. message .. "\n") end
   )
-  local command_ok, command = pcall(devrun.build_command, options, launch, context)
+  local command_ok, command, rendered_command = pcall(function()
+    local built_command = devrun.build_command(options, launch, context)
+    return built_command, devrun.render_command(built_command)
+  end)
   if not command_ok then
     stderr("devrun: " .. tostring(command) .. "\n")
     return 2
@@ -634,7 +637,7 @@ function devrun.run(arguments, dependencies)
       stdout("# inspect: " .. devrun.render_command(inspect) .. "\n")
       stdout("# if absent: " .. devrun.render_command(create) .. "\n")
     end
-    stdout(devrun.render_command(command) .. "\n")
+    stdout(rendered_command .. "\n")
     return 0
   end
 
@@ -654,7 +657,7 @@ function devrun.run(arguments, dependencies)
       return 1
     end
   end
-  local status = devrun.execute(command, execute)
+  local status = process_status(execute(rendered_command))
   if status == 0 and launch.detached then
     print_detached_details(stdout, name, launch)
   end

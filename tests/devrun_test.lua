@@ -898,6 +898,30 @@ test("connext dry-run prints prerequisites without external side effects", funct
   assert(rendered:match("'docker' 'run'.*'%-%-network'"), rendered)
 end)
 
+test("invalid connext launch command fails before external side effects", function()
+  local errors = {}
+  local execute_calls = 0
+  local capture_calls = 0
+  local status = devrun.run({
+    "rticom/connext-sdk:7.7.0\nbad", "--engine", "docker",
+  }, {
+    cwd = "/tmp/project",
+    path_exists = function() return false end,
+    host_identity = function()
+      return { uid = "1001", gid = "1002", username = "tester" }
+    end,
+    stderr = function(value) errors[#errors + 1] = value end,
+    capture = function() capture_calls = capture_calls + 1 end,
+    execute = function() execute_calls = execute_calls + 1 end,
+  })
+
+  equal(status, 2)
+  equal(execute_calls, 0)
+  equal(capture_calls, 0)
+  assert(joined(errors):match("^devrun: "), joined(errors))
+  assert(joined(errors):match("command arguments may not contain NUL or newlines"), joined(errors))
+end)
+
 test("explicit generic dev replaces Connext work", function()
   local output = {}
   local path_checks = {}
