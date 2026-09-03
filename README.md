@@ -123,9 +123,23 @@ Optional host-home mounts use compact relative paths:
 ```lua
 optional_home_mounts = {
   readonly = {
-    ".config/nvim",
+    ".bash_logout",
+    ".bashrc",
+    ".config/kitty/",
+    ".config/lazygit/",
+    ".config/mise/",
+    ".config/nvim/",
+    ".config/opencode/",
+    ".config/starship.toml",
     ".gitconfig",
+    ".gitignore",
+    ".gitignore_global",
     ".clangd",
+    ".markdownlint.yaml",
+    ".profile",
+    ".scripts/",
+    ".vscode/mcp.json",
+    "tools/",
   },
   writable = {
     ".config/nvim/lazy-lock.json",

@@ -200,9 +200,23 @@ resolved container home:
 ```lua
 optional_home_mounts = {
   readonly = {
-    ".config/nvim",
+    ".bash_logout",
+    ".bashrc",
+    ".config/kitty/",
+    ".config/lazygit/",
+    ".config/mise/",
+    ".config/nvim/",
+    ".config/opencode/",
+    ".config/starship.toml",
     ".gitconfig",
+    ".gitignore",
+    ".gitignore_global",
     ".clangd",
+    ".markdownlint.yaml",
+    ".profile",
+    ".scripts/",
+    ".vscode/mcp.json",
+    "tools/",
   },
   writable = {
     ".config/nvim/lazy-lock.json",
@@ -315,6 +329,10 @@ For development, the exact invocation directory is mounted at `/workspace`.
 The launcher does not search for a Git repository root.
 This supports ad hoc work in arbitrary directories and predictable behavior in
 subdirectories.
+The workspace remains at `/workspace` rather than beneath `/home/devuser`.
+This keeps the host bind mount separate from the persistent home volume,
+avoids nested mounts, and distinguishes project files from persistent
+container state and selected host configuration.
 
 ### Persistent Home
 

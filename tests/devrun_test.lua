@@ -303,13 +303,13 @@ test("dev expands and renders ordered optional home mounts", function()
     })
     local context = fake_context(engine)
     local launch = devrun.resolve_launch(options, devrun.config, context)
-    equal(#launch.optional_mounts, 4)
-    equal(launch.optional_mounts[1].source, "/home/Test User/.config/nvim")
-    equal(launch.optional_mounts[1].target, "/home/devuser/.config/nvim")
+    equal(#launch.optional_mounts, 18)
+    equal(launch.optional_mounts[1].source, "/home/Test User/.bash_logout")
+    equal(launch.optional_mounts[1].target, "/home/devuser/.bash_logout")
     equal(launch.optional_mounts[1].readonly, true)
-    equal(launch.optional_mounts[4].source,
+    equal(launch.optional_mounts[18].source,
       "/home/Test User/.config/nvim/lazy-lock.json")
-    equal(launch.optional_mounts[4].readonly, false)
+    equal(launch.optional_mounts[18].readonly, false)
 
     local warnings = {}
     devrun.filter_optional_mounts(launch, function(path)
@@ -318,7 +318,7 @@ test("dev expands and renders ordered optional home mounts", function()
       warnings[#warnings + 1] = message
     end)
     local command = devrun.build_command(options, launch, context)
-    local parent = "/home/Test User/.config/nvim:/home/devuser/.config/nvim:ro"
+    local parent = "/home/Test User/.config/nvim/:/home/devuser/.config/nvim/:ro"
     local lock = "/home/Test User/.config/nvim/lazy-lock.json:"
       .. "/home/devuser/.config/nvim/lazy-lock.json"
 
@@ -1015,7 +1015,7 @@ test("explicit generic dev replaces Connext work", function()
   })
 
   equal(status, 0)
-  equal(#path_checks, 4)
+  equal(#path_checks, 18)
   local rendered = joined(output)
   assert(not rendered:match("network"), rendered)
   assert(not rendered:match("rti_license"), rendered)
