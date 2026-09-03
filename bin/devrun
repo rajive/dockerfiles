@@ -103,32 +103,22 @@ devrun.config = {
   },
   images = {
     {
-      pattern = "^docker%.io/rticom/connext%-sdk:",
+      pattern = "%f[%w]rticom/connext%-sdk%f[:@%z]",
       profiles = { "dev", "identity", "connext" },
       overrides = { container_user = "rtiuser", container_home = "/home/rtiuser" },
     },
     {
-      pattern = "^rticom/connext%-sdk:",
+      pattern = "%f[%w]connext%-sdk%-dev%f[:@%z]",
       profiles = { "dev", "identity", "connext" },
       overrides = { container_user = "rtiuser", container_home = "/home/rtiuser" },
     },
     {
-      pattern = "connext%-sdk%-dev:",
-      profiles = { "dev", "identity", "connext" },
-      overrides = { container_user = "rtiuser", container_home = "/home/rtiuser" },
-    },
-    {
-      pattern = "connext%-tools:",
+      pattern = "%f[%w]connext%-tools%f[:@%z]",
       profiles = { "gui", "connext" },
       overrides = { container_home = "/home/user" },
     },
     {
-      pattern = "^docker%.io/hectorm/xubuntu:",
-      profiles = { "gui" },
-      overrides = {},
-    },
-    {
-      pattern = "^hectorm/xubuntu:",
+      pattern = "%f[%w]hectorm/xubuntu%f[:@%z]",
       profiles = { "gui" },
       overrides = {},
     },

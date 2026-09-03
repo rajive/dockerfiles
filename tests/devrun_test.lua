@@ -103,18 +103,54 @@ test("image profiles precede defaults", function()
   list_equal(profiles, { "dev", "identity" })
 end)
 
-test("registry-qualified upstream images select their profiles", function()
-  local sdk = devrun.select_profiles(
-    { image = "docker.io/rticom/connext-sdk:7.7.0", profiles = {} },
-    devrun.config
-  )
-  list_equal(sdk, { "dev", "identity", "connext" })
+test("optional registry prefixes do not change upstream image profiles", function()
+  for _, image in ipairs({
+    "rticom/connext-sdk:7.7.0",
+    "docker.io/rticom/connext-sdk:7.7.0",
+  }) do
+    local profiles = devrun.select_profiles({ image = image, profiles = {} }, devrun.config)
+    list_equal(profiles, { "dev", "identity", "connext" }, image)
+  end
 
-  local xubuntu = devrun.select_profiles(
-    { image = "docker.io/hectorm/xubuntu:latest", profiles = {} },
-    devrun.config
-  )
-  list_equal(xubuntu, { "gui" })
+  for _, image in ipairs({
+    "hectorm/xubuntu:latest",
+    "docker.io/hectorm/xubuntu:latest",
+  }) do
+    local profiles = devrun.select_profiles({ image = image, profiles = {} }, devrun.config)
+    list_equal(profiles, { "gui" }, image)
+  end
+end)
+
+test("optional registry and namespace prefixes do not change custom image profiles", function()
+  for _, image in ipairs({
+    "connext-sdk-dev:7.7.0",
+    "rajive7400/connext-sdk-dev:7.7.0",
+    "docker.io/rajive7400/connext-sdk-dev:7.7.0",
+  }) do
+    local profiles = devrun.select_profiles({ image = image, profiles = {} }, devrun.config)
+    list_equal(profiles, { "dev", "identity", "connext" }, image)
+  end
+
+  for _, image in ipairs({
+    "connext-tools:7.7.0",
+    "rajive7400/connext-tools:7.7.0",
+    "docker.io/rajive7400/connext-tools:7.7.0",
+  }) do
+    local profiles = devrun.select_profiles({ image = image, profiles = {} }, devrun.config)
+    list_equal(profiles, { "gui", "connext" }, image)
+  end
+end)
+
+test("image suffix rules preserve name boundaries", function()
+  for _, image in ipairs({
+    "notrticom/connext-sdk:7.7.0",
+    "nothectorm/xubuntu:latest",
+    "notconnext-sdk-dev:7.7.0",
+    "notconnext-tools:7.7.0",
+  }) do
+    local profiles = devrun.select_profiles({ image = image, profiles = {} }, devrun.config)
+    list_equal(profiles, { "dev", "identity" }, image)
+  end
 end)
 
 test("later profiles override scalars and append lists", function()
@@ -167,6 +203,40 @@ test("image mapping overrides profiles", function()
 
   equal(resolved.container_user, "rtiuser")
   equal(resolved.container_home, "/home/rtiuser")
+end)
+
+test("untagged known images retain mapped policy", function()
+  local cases = {
+    {
+      image = "docker.io/rticom/connext-sdk",
+      profiles = { "dev", "identity", "connext" },
+      container_home = "/home/rtiuser",
+    },
+    {
+      image = "docker.io/rajive7400/connext-sdk-dev",
+      profiles = { "dev", "identity", "connext" },
+      container_home = "/home/rtiuser",
+    },
+    {
+      image = "docker.io/rajive7400/connext-tools",
+      profiles = { "gui", "connext" },
+      container_home = "/home/user",
+    },
+    {
+      image = "docker.io/hectorm/xubuntu",
+      profiles = { "gui" },
+    },
+  }
+
+  for _, case in ipairs(cases) do
+    local resolved = devrun.resolve_launch(
+      { image = case.image, profiles = {} },
+      devrun.config,
+      { cwd = "/tmp/project", home = "/home/test", env = {} }
+    )
+    list_equal(resolved.profiles, case.profiles, case.image)
+    equal(resolved.container_home, case.container_home, case.image)
+  end
 end)
 
 test("generate safe container name", function()
