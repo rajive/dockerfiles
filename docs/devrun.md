@@ -29,7 +29,7 @@ arbitrary directory.
 ## Goals
 
 - Provide one executable named `devrun` under `bin/`.
-- Require only Lua 5.4 and its standard library.
+- Require only Lua 5.4 or later and its standard library.
 - Support Podman and Docker.
 - Accept an image reference as the required positional argument.
 - Compose reusable launch profiles.
@@ -350,7 +350,8 @@ The launcher minimizes host exposure by using explicit mounts instead of
 mounting all of the host home or configuration directory.
 Sensitive host configuration is read-only by default.
 
-Lua 5.4's standard library has no portable argument-vector process API.
+The standard library in Lua 5.4 and later has no portable argument-vector
+process API.
 The launcher therefore:
 
 - Constructs commands internally as argument arrays.
@@ -396,7 +397,7 @@ these aliases launch.
 
 ## Testing
 
-Tests use Lua 5.4 and no external test framework.
+Tests use Lua 5.4 or later and no external test framework.
 They should cover:
 
 - CLI parsing and validation.

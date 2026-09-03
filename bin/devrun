@@ -25,6 +25,8 @@ local function account_name(username)
   return "devuser"
 end
 
+-- User-editable policy: profiles express portable launch intent, while ordered
+-- image mappings select profile sets and supply image-specific account details.
 devrun.config = {
   engine = nil,
   defaults = {
@@ -197,6 +199,7 @@ local function copy_list(values)
 end
 
 local function matching_image(image, config)
+  -- First match wins; keep image rules in an array so precedence is explicit.
   for _, mapping in ipairs(config.images or {}) do
     local matches = mapping.exact and image == mapping.exact
       or mapping.pattern and image:match(mapping.pattern)
@@ -208,6 +211,7 @@ local function matching_image(image, config)
 end
 
 function devrun.select_profiles(options, config)
+  -- Explicit profiles replace, rather than extend, image-derived policy.
   if #options.profiles > 0 then
     return copy_list(options.profiles)
   end
@@ -229,6 +233,8 @@ local list_fields = {
 local keyed_fields = { env = true }
 
 local function append_mounts(target, mounts)
+  -- Mount destinations are unique: a later profile replaces the earlier source
+  -- and options for that destination instead of creating ambiguous mounts.
   target.mounts = target.mounts or {}
   for _, mount in ipairs(mounts) do
     local replaced = false
@@ -246,6 +252,8 @@ local function append_mounts(target, mounts)
 end
 
 local function merge(target, source)
+  -- Profiles merge in selection order: scalars and keyed values use the later
+  -- value, while ordinary lists append to preserve each profile's arguments.
   for key, value in pairs(source or {}) do
     if key == "mounts" then
       append_mounts(target, value)
@@ -282,6 +290,8 @@ function devrun.resolve_profiles(names, config, context)
 end
 
 function devrun.resolve_launch(options, config, context)
+  -- Build the engine-neutral launch model before optional paths and adapter
+  -- details are resolved. Mapping overrides apply only to automatic selection.
   context.config = config
   context.image = options.image
   local profiles = devrun.select_profiles(options, config)
@@ -291,6 +301,8 @@ function devrun.resolve_launch(options, config, context)
     merge(resolved, mapping.overrides)
   end
   if resolved.home_volume and resolved.container_home then
+    -- A named home volume persists tool state; ownership is an adapter request,
+    -- not a request to alter ownership of bind-mounted host paths.
     append_mounts(resolved, { {
       source = resolved.home_volume,
       target = resolved.container_home,
@@ -326,6 +338,8 @@ function devrun.container_name(cwd, image)
 end
 
 function devrun.shell_quote(value)
+  -- os.execute has no argv form in standard Lua. Reject line boundaries, then
+  -- encode every argument as one POSIX-shell word before execution or display.
   value = tostring(value)
   if value:find("[%z\r\n]") then
     fail("command arguments may not contain NUL or newlines", 1)
@@ -381,6 +395,8 @@ function devrun.build_command(options, launch, context)
     local username = launch.container_user or account_name(identity.username)
     local container_home = launch.container_home or context.home
     append(arguments, "--user", identity.uid .. ":" .. identity.gid)
+    -- Podman can map the host IDs into a user namespace and synthesize passwd
+    -- metadata. Docker's portable equivalent is only the numeric --user pair.
     if engine == "podman" then
       append(arguments, "--userns=keep-id")
       append(arguments, "--passwd-entry",
@@ -400,6 +416,8 @@ function devrun.build_command(options, launch, context)
     local specification = mount.source .. ":" .. mount.target
     local options = {}
     if mount.readonly then options[#options + 1] = "ro" end
+    -- Podman's U applies ownership to named-volume contents. Z/z relabel bind
+    -- mounts for private/shared SELinux use; Docker receives neither extension.
     if mount.ownership and engine == "podman" then options[#options + 1] = "U" end
     if mount.relabel == "private" and engine == "podman" then options[#options + 1] = "Z" end
     if mount.relabel == "shared" and engine == "podman" then options[#options + 1] = "z" end
@@ -428,6 +446,7 @@ function devrun.build_command(options, launch, context)
 end
 
 function devrun.render_command(arguments)
+  -- This is the single argv-to-shell boundary used by dry runs and execution.
   local quoted = {}
   for index, value in ipairs(arguments) do
     quoted[index] = devrun.shell_quote(value)
@@ -488,6 +507,8 @@ function devrun.network_commands(engine, network)
 end
 
 function devrun.ensure_network(engine, network, capture, execute)
+  -- Listing names distinguishes an absent network from an inspection failure;
+  -- only absence permits creation, so permission/daemon errors are not masked.
   local inspect, create = devrun.network_commands(engine, network)
   local status, output = capture(inspect)
   if status ~= 0 then
@@ -552,6 +573,9 @@ local function path_exists(path)
 end
 
 function devrun.run(arguments, dependencies)
+  -- Orchestrate without container-engine mutations until the launch model and
+  -- command are valid: parse, resolve context/profiles, filter optional mounts,
+  -- then render. Real launches refuse name collisions and ensure networking.
   dependencies = dependencies or {}
   local stdout = dependencies.stdout or function(value) io.stdout:write(value) end
   local stderr = dependencies.stderr or function(value) io.stderr:write(value) end
@@ -577,6 +601,8 @@ function devrun.run(arguments, dependencies)
   }
   context.environment = context.env
   local selected_profiles = devrun.select_profiles(options, devrun.config)
+  -- Host identity is queried lazily because profiles such as GUI intentionally
+  -- preserve the image's declared user instead of imposing the host account.
   for _, profile in ipairs(selected_profiles) do
     if profile == "identity" then
       context.identity = (dependencies.host_identity or host_identity)()
@@ -602,6 +628,7 @@ function devrun.run(arguments, dependencies)
     return 2
   end
   if options.dry_run then
+    -- Describe conditional network setup without inspecting or changing it.
     if launch.ensure_network then
       local inspect, create = devrun.network_commands(context.engine, launch.ensure_network)
       stdout("# ensure network " .. devrun.shell_quote(launch.ensure_network) .. " exists\n")

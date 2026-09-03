@@ -1,6 +1,6 @@
 # dockerfiles
 
-Container images and Make targets for RTI Connext development and tools.
+Container images and Make targets for development and tools.
 `bin/devrun` is the development launcher: it turns an image reference and a
 small set of composable profiles into a Podman or Docker invocation.
 
@@ -8,7 +8,7 @@ See [the devrun design](docs/devrun.md) for the rationale and detailed design.
 
 ## Requirements
 
-- Lua 5.4 and its standard library
+- Lua 5.4 or later and its standard library
 - Podman or Docker
 
 ## Ad Hoc Development
@@ -89,12 +89,12 @@ on a Connext image does not add its network or license policy.
 
 Known mappings are:
 
-| Image | Profiles | Container home policy |
-| --- | --- | --- |
-| `docker.io/rticom/connext-sdk:<tag>` or `rticom/connext-sdk:<tag>` | `dev`, `identity`, `connext` | `/home/rtiuser` |
-| Any image containing `connext-sdk-dev:<tag>` | `dev`, `identity`, `connext` | `/home/rtiuser` |
-| Any image containing `connext-tools:<tag>` | `gui`, `connext` | `/home/user` |
-| `docker.io/hectorm/xubuntu:<tag>` or `hectorm/xubuntu:<tag>` | `gui` | Image default |
+| Image                                                              | Profiles                     | Container home policy |
+| ------------------------------------------------------------------ | ---------------------------- | --------------------- |
+| `docker.io/rticom/connext-sdk:<tag>` or `rticom/connext-sdk:<tag>` | `dev`, `identity`, `connext` | `/home/rtiuser`       |
+| Any image containing `connext-sdk-dev:<tag>`                       | `dev`, `identity`, `connext` | `/home/rtiuser`       |
+| Any image containing `connext-tools:<tag>`                         | `gui`, `connext`             | `/home/user`          |
+| `docker.io/hectorm/xubuntu:<tag>` or `hectorm/xubuntu:<tag>`       | `gui`                        | Image default         |
 
 The `dev` profile mounts one named volume, `devrun`, at the selected container
 home. Generic images use `/home/<host-user>` (or `/home/devuser` when the host
@@ -114,14 +114,14 @@ profiles, mappings, or image overrides.
 
 The launcher reads:
 
-| Variable | Purpose | Default |
-| --- | --- | --- |
-| `CONNEXT_VERSION` | License mount's versioned SDK path | `7.7.0` |
-| `MY_NET` | Connext bridge network | `my-net` |
-| `RTI_LICENSE_FILE` | Optional RTI license source | `$HOME/rti/licenses/rti_license.dat` |
-| `TZ` | Container timezone | `America/Los_Angeles` |
-| `DEVRUN_SSH_PORT` | GUI SSH host port | `3322` |
-| `DEVRUN_RDP_PORT` | GUI RDP host port | `3389` |
+| Variable           | Purpose                            | Default                              |
+| ------------------ | ---------------------------------- | ------------------------------------ |
+| `CONNEXT_VERSION`  | License mount's versioned SDK path | `7.7.0`                              |
+| `MY_NET`           | Connext bridge network             | `my-net`                             |
+| `RTI_LICENSE_FILE` | Optional RTI license source        | `$HOME/rti/licenses/rti_license.dat` |
+| `TZ`               | Container timezone                 | `America/Los_Angeles`                |
+| `DEVRUN_SSH_PORT`  | GUI SSH host port                  | `3322`                               |
+| `DEVRUN_RDP_PORT`  | GUI RDP host port                  | `3389`                               |
 
 `TERM` is forwarded by `dev`; `HOME` and the host account identity are used to
 construct mounts and identity settings.
