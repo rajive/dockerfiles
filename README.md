@@ -27,7 +27,9 @@ directory at `/workspace`, set it as the working directory, and run as the
 host's numeric UID and GID. Files created in the bind-mounted workspace
 therefore retain host UID/GID ownership. Podman also uses `--userns=keep-id`
 and adds a passwd entry; Docker runs as the numeric user without synthesizing
-that entry. Podman privately relabels the workspace bind mount for SELinux.
+that entry. Development launches consistently use `devuser` and
+`/home/devuser`, regardless of the host account or image. Podman privately
+relabels the workspace bind mount for SELinux.
 
 Existing `~/.config/nvim`, `~/.gitconfig`, and `~/.clangd` paths are mounted
 read-only. Missing paths are skipped with warnings. The launcher does not
@@ -91,16 +93,15 @@ Known mappings are:
 
 | Image                                                              | Profiles                     | Container home policy |
 | ------------------------------------------------------------------ | ---------------------------- | --------------------- |
-| `docker.io/rticom/connext-sdk:<tag>` or `rticom/connext-sdk:<tag>` | `dev`, `identity`, `connext` | `/home/rtiuser`       |
-| Any image containing `connext-sdk-dev:<tag>`                       | `dev`, `identity`, `connext` | `/home/rtiuser`       |
+| `docker.io/rticom/connext-sdk:<tag>` or `rticom/connext-sdk:<tag>` | `dev`, `identity`, `connext` | `/home/devuser`       |
+| Any image containing `connext-sdk-dev:<tag>`                       | `dev`, `identity`, `connext` | `/home/devuser`       |
 | Any image containing `connext-tools:<tag>`                         | `gui`, `connext`             | `/home/user`          |
 | `docker.io/hectorm/xubuntu:<tag>` or `hectorm/xubuntu:<tag>`       | `gui`                        | Image default         |
 
-The `dev` profile mounts one named volume, `devrun`, at the selected container
-home. Generic images use `/home/<host-user>` (or `/home/devuser` when the host
-account name is unsuitable); mapped Connext SDK images use `/home/rtiuser`.
-Podman requests ownership adjustment for this volume. GUI mappings do not use
-the `dev` profile, so they do not mount the shared home volume.
+The `dev` profile mounts one named volume, `devrun`, at the canonical container
+home `/home/devuser`. Podman requests ownership adjustment for this volume. GUI
+mappings do not use the `dev` profile, so they preserve image account policy
+and do not mount the shared home volume.
 
 GUI launches return after startup. SSH defaults to `localhost:3322` and RDP to
 `localhost:3389`, targeting container ports 3322 and 3389. On successful

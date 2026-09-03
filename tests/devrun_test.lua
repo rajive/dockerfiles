@@ -194,15 +194,15 @@ test("exact image mappings are supported", function()
   list_equal(profiles, { "gui" })
 end)
 
-test("image mapping overrides profiles", function()
+test("development images use the canonical container account", function()
   local resolved = devrun.resolve_launch(
     { image = "rticom/connext-sdk:7.7.0", profiles = {} },
     devrun.config,
     { cwd = "/tmp/project", home = "/home/test", env = {} }
   )
 
-  equal(resolved.container_user, "rtiuser")
-  equal(resolved.container_home, "/home/rtiuser")
+  equal(resolved.container_user, "devuser")
+  equal(resolved.container_home, "/home/devuser")
 end)
 
 test("untagged known images retain mapped policy", function()
@@ -210,12 +210,12 @@ test("untagged known images retain mapped policy", function()
     {
       image = "docker.io/rticom/connext-sdk",
       profiles = { "dev", "identity", "connext" },
-      container_home = "/home/rtiuser",
+      container_home = "/home/devuser",
     },
     {
       image = "docker.io/rajive7400/connext-sdk-dev",
       profiles = { "dev", "identity", "connext" },
-      container_home = "/home/rtiuser",
+      container_home = "/home/devuser",
     },
     {
       image = "docker.io/rajive7400/connext-tools",
@@ -273,7 +273,7 @@ test("render minimal dev command", function()
   contains(command, "--rm")
   contains(command, "-it")
   contains(command, "/tmp/My Project:/workspace:Z")
-  contains(command, "devrun:/home/testuser:U")
+  contains(command, "devrun:/home/devuser:U")
   contains(command, "/workspace")
   contains(command, "ubuntu:24.04")
   contains(command, "/bin/bash")
@@ -377,7 +377,7 @@ test("identity rendering keeps Podman flags out of Docker", function()
   not_contains(docker, "--passwd-entry")
 end)
 
-test("known images preserve their container account policy", function()
+test("development images share canonical account while GUI preserves image policy", function()
   local rti_options = devrun.parse_args({
     "docker.io/rajive7400/connext-sdk-dev:7.7.0", "--engine", "podman", "--dry-run",
   })
@@ -385,9 +385,9 @@ test("known images preserve their container account policy", function()
   local rti_launch = devrun.resolve_launch(rti_options, devrun.config, rti_context)
   local rti_command = devrun.build_command(rti_options, rti_launch, rti_context)
 
-  contains(rti_command, "USER=rtiuser")
-  contains(rti_command, "HOME=/home/rtiuser")
-  contains(rti_command, "rtiuser:x:1001:1002:rtiuser:/home/rtiuser:/bin/bash")
+  contains(rti_command, "USER=devuser")
+  contains(rti_command, "HOME=/home/devuser")
+  contains(rti_command, "devuser:x:1001:1002:devuser:/home/devuser:/bin/bash")
 
   local gui_options = devrun.parse_args({
     "docker.io/rajive7400/connext-tools:7.7.0", "--engine", "podman", "--dry-run",

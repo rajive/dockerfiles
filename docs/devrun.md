@@ -187,7 +187,7 @@ It:
 - Mounts the invocation directory at `/workspace`.
 - Sets `/workspace` as the working directory.
 - Starts a shell configured by the profile, initially `/bin/bash`.
-- Mounts the shared `devrun` volume at the mapped container home.
+- Mounts the shared `devrun` volume at `/home/devuser`.
 - Passes relevant terminal and timezone environment variables.
 - Mounts an explicit allowlist of host development configuration.
 
@@ -205,10 +205,10 @@ The `identity` profile maps the host user's numeric identity into compatible
 images. It is selected by default for unknown development images but can be
 omitted explicitly because arbitrary images may require their declared user.
 
-Generic development uses the validated host username with a conventional
-`/home/<username>` container home. Invalid account names fall back to
-`devuser`. Known image mappings retain their established account names and
-homes, such as `rtiuser` and `/home/rtiuser` for Connext SDK images.
+Development launches use the canonical account `devuser` and home
+`/home/devuser`, independent of the host account and image. The numeric UID and
+GID still come from the host so workspace files retain host ownership. GUI
+profiles preserve the image's account policy because they omit `identity`.
 
 It may configure:
 
@@ -268,9 +268,8 @@ Initial mappings preserve the practical behavior of the existing targets:
 | `*/connext-tools:<version>` | `gui`, `connext` |
 | `hectorm/xubuntu:<version>` | `gui` |
 
-Mappings provide image-specific values such as the container user and home.
-These values must be verified against the image definitions during
-implementation.
+Mappings may provide image-specific values such as the container home for GUI
+images. Development images use the canonical `devuser` account instead.
 
 ## Runtime Behavior
 
@@ -300,9 +299,10 @@ Development images share one named volume:
 devrun
 ```
 
-The image mapping must declare the container home where the volume is mounted.
-Sharing the volume preserves Neovim plugins, caches, and shell state across
-ephemeral launches and image upgrades.
+The volume is mounted at the canonical development home `/home/devuser`.
+Sharing it preserves Neovim plugins, caches, and shell state across ephemeral
+launches and image upgrades without creating per-host or per-image home
+directories.
 Podman adjusts ownership of this named volume for the active mapped user. This
 does not alter ownership of the bind-mounted workspace.
 

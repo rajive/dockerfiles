@@ -35,13 +35,14 @@ devrun.config = {
     license_file = getenv("RTI_LICENSE_FILE", getenv("HOME", "") .. "/rti/licenses/rti_license.dat"),
     timezone = getenv("TZ", "America/Los_Angeles"),
     home_volume = "devrun",
+    container_user = "devuser",
+    container_home = "/home/devuser",
     ssh_port = getenv_integer("DEVRUN_SSH_PORT", 3322),
     rdp_port = getenv_integer("DEVRUN_RDP_PORT", 3389),
   },
   default_profiles = { "dev", "identity" },
   profiles = {
     dev = function(ctx)
-      local username = account_name(ctx.username or (ctx.identity and ctx.identity.username))
       return {
         interactive = true,
         remove = true,
@@ -55,8 +56,8 @@ devrun.config = {
           { source = ctx.home .. "/.clangd", target = ".clangd", readonly = true },
         },
         workdir = "/workspace",
-        container_user = username,
-        container_home = "/home/" .. username,
+        container_user = ctx.config.defaults.container_user,
+        container_home = ctx.config.defaults.container_home,
         command = { "/bin/bash" },
         env = {
           TERM = ctx.env.TERM,
@@ -64,9 +65,13 @@ devrun.config = {
         },
       }
     end,
-    identity = {
-      identity = true,
-    },
+    identity = function(ctx)
+      return {
+        identity = true,
+        container_user = ctx.config.defaults.container_user,
+        container_home = ctx.config.defaults.container_home,
+      }
+    end,
     connext = function(ctx)
       local version = ctx.config.defaults.connext_version
       local license_file = ctx.config.defaults.license_file
@@ -105,12 +110,12 @@ devrun.config = {
     {
       pattern = "%f[%w]rticom/connext%-sdk%f[:@%z]",
       profiles = { "dev", "identity", "connext" },
-      overrides = { container_user = "rtiuser", container_home = "/home/rtiuser" },
+      overrides = {},
     },
     {
       pattern = "%f[%w]connext%-sdk%-dev%f[:@%z]",
       profiles = { "dev", "identity", "connext" },
-      overrides = { container_user = "rtiuser", container_home = "/home/rtiuser" },
+      overrides = {},
     },
     {
       pattern = "%f[%w]connext%-tools%f[:@%z]",
