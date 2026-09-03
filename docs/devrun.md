@@ -347,7 +347,8 @@ Sharing it preserves Neovim plugins, caches, and shell state across ephemeral
 launches and image upgrades without creating per-host or per-image home
 directories.
 Podman adjusts ownership of this named volume for the active mapped user. This
-does not alter ownership of the bind-mounted workspace.
+does not alter ownership of the bind-mounted workspace. It also privately
+relabels the volume so its contents remain accessible under SELinux.
 Docker shared-home ownership requires runtime verification and an explicit
 initialization policy before writable persistent-home behavior can be
 guaranteed for a host-mapped numeric user.

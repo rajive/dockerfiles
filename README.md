@@ -100,9 +100,9 @@ Known mappings are:
 | `docker.io/hectorm/xubuntu:<tag>` or `hectorm/xubuntu:<tag>`       | `gui`                        | Image default         |
 
 The `dev` profile mounts one named volume, `devrun`, at the canonical container
-home `/home/devuser`. Podman requests ownership adjustment for this volume. GUI
-mappings do not use the `dev` profile, so they preserve image account policy
-and do not mount the shared home volume.
+home `/home/devuser`. Podman requests ownership adjustment and private SELinux
+relabeling for this volume. GUI mappings do not use the `dev` profile, so they
+preserve image account policy and do not mount the shared home volume.
 
 Docker does not have an equivalent to Podman's volume ownership adjustment.
 Writable shared-home behavior for Docker remains unverified; use Podman for

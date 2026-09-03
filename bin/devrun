@@ -330,6 +330,7 @@ function devrun.resolve_launch(options, config, context)
       source = resolved.home_volume,
       target = resolved.container_home,
       ownership = true,
+      relabel = "private",
     } })
   end
   for _, group in ipairs({ "readonly", "writable" }) do
