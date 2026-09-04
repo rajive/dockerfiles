@@ -290,7 +290,8 @@ test("render minimal dev command", function()
   contains(command, "--rm")
   contains(command, "-it")
   contains(command, "/tmp/My Project:/workspace:Z")
-  contains(command, "devrun:/home/devuser:U,Z")
+  contains(command, "devrun:/home/devuser:U,z")
+  not_contains(command, "devrun:/home/devuser:U,Z")
   contains(command, "/workspace")
   contains(command, "ubuntu:24.04")
   contains(command, "/bin/bash")
@@ -307,9 +308,11 @@ test("dev expands and renders ordered optional home mounts", function()
     equal(launch.optional_mounts[1].source, "/home/Test User/.bash_logout")
     equal(launch.optional_mounts[1].target, "/home/devuser/.bash_logout")
     equal(launch.optional_mounts[1].readonly, true)
+    equal(launch.optional_mounts[1].relabel, "shared")
     equal(launch.optional_mounts[18].source,
       "/home/Test User/.config/nvim/lazy-lock.json")
     equal(launch.optional_mounts[18].readonly, false)
+    equal(launch.optional_mounts[18].relabel, "shared")
 
     local warnings = {}
     devrun.filter_optional_mounts(launch, function(path)
@@ -321,11 +324,22 @@ test("dev expands and renders ordered optional home mounts", function()
     local parent = "/home/Test User/.config/nvim/:/home/devuser/.config/nvim/:ro"
     local lock = "/home/Test User/.config/nvim/lazy-lock.json:"
       .. "/home/devuser/.config/nvim/lazy-lock.json"
+    if engine == "podman" then
+      parent = parent .. ",z"
+      lock = lock .. ":z"
+    end
 
     contains(command, parent)
-    contains(command, "/home/Test User/.gitconfig:/home/devuser/.gitconfig:ro")
-    not_contains(command, "/home/Test User/.clangd:/home/devuser/.clangd:ro")
+    contains(command, "/home/Test User/.gitconfig:/home/devuser/.gitconfig:ro"
+      .. (engine == "podman" and ",z" or ""))
+    not_contains(command, "/home/Test User/.clangd:/home/devuser/.clangd:ro"
+      .. (engine == "podman" and ",z" or ""))
     contains(command, lock)
+    if engine == "podman" then
+      not_contains(command, "/home/Test User/.config/nvim/:/home/devuser/.config/nvim/:ro,Z")
+      not_contains(command, "/home/Test User/.config/nvim/lazy-lock.json:"
+        .. "/home/devuser/.config/nvim/lazy-lock.json:Z")
+    end
     assert(index_of(command, parent) < index_of(command, lock), engine)
     equal(#warnings, 1)
     assert(warnings[1]:match("%.clangd"), warnings[1])
@@ -447,7 +461,7 @@ test("identity rendering keeps Podman flags out of Docker", function()
   local docker = identity_command("docker")
   contains(docker, "1001:1002")
   contains(docker, "devrun:/home/devuser")
-  not_contains(docker, "devrun:/home/devuser:U,Z")
+  not_contains(docker, "devrun:/home/devuser:U,z")
   not_contains(docker, "--userns=keep-id")
   not_contains(docker, "--passwd-entry")
 end)

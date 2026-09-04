@@ -229,6 +229,9 @@ non-string entries are configuration errors. Read-only entries are emitted
 before writable entries. The writable nested `lazy-lock.json` mount is an
 intentional exception: it follows the read-only `.config/nvim` parent mount so
 Neovim can update only its lock file.
+Podman applies shared SELinux relabeling to both groups because read-only status
+does not change relabel semantics and multiple development containers may use
+the same host paths.
 The launcher skips a missing optional path and prints a warning rather than
 allowing the container engine to create a directory in its place.
 
@@ -347,8 +350,8 @@ Sharing it preserves Neovim plugins, caches, and shell state across ephemeral
 launches and image upgrades without creating per-host or per-image home
 directories.
 Podman adjusts ownership of this named volume for the active mapped user. This
-does not alter ownership of the bind-mounted workspace. It also privately
-relabels the volume so its contents remain accessible under SELinux.
+does not alter ownership of the bind-mounted workspace. It also applies shared
+SELinux relabeling so multiple development containers can use the volume.
 Docker shared-home ownership requires runtime verification and an explicit
 initialization policy before writable persistent-home behavior can be
 guaranteed for a host-mapped numeric user.

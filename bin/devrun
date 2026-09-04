@@ -330,7 +330,7 @@ function devrun.resolve_launch(options, config, context)
       source = resolved.home_volume,
       target = resolved.container_home,
       ownership = true,
-      relabel = "private",
+      relabel = "shared",
     } })
   end
   for _, group in ipairs({ "readonly", "writable" }) do
@@ -352,6 +352,7 @@ function devrun.resolve_launch(options, config, context)
         source = context.home .. "/" .. path,
         target = resolved.container_home and (resolved.container_home .. "/" .. path),
         readonly = group == "readonly",
+        relabel = "shared",
       }
     end
   end
@@ -454,8 +455,8 @@ function devrun.build_command(options, launch, context)
     local specification = mount.source .. ":" .. mount.target
     local options = {}
     if mount.readonly then options[#options + 1] = "ro" end
-    -- Podman's U applies ownership to named-volume contents. Z/z relabel bind
-    -- mounts for private/shared SELinux use; Docker receives neither extension.
+    -- Podman's U applies ownership to named-volume contents. Z/z relabel
+    -- volume sources for private/shared SELinux use; Docker receives neither.
     if mount.ownership and engine == "podman" then options[#options + 1] = "U" end
     if mount.relabel == "private" and engine == "podman" then options[#options + 1] = "Z" end
     if mount.relabel == "shared" and engine == "podman" then options[#options + 1] = "z" end

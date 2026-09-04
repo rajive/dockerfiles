@@ -34,8 +34,10 @@ relabels the workspace bind mount for SELinux.
 Existing `~/.config/nvim`, `~/.gitconfig`, and `~/.clangd` paths are mounted
 read-only. `~/.config/nvim/lazy-lock.json` is mounted afterward as writable,
 overriding that nested location so Neovim can update its lock file. Missing
-paths are skipped with warnings. The launcher does not search for a repository
-root or mount the rest of the host home.
+paths are skipped with warnings. Podman uses shared SELinux relabeling for both
+read-only and writable host-home binds so concurrent development containers can
+use them. The launcher does not search for a repository root or mount the rest
+of the host home.
 
 ## Command Line
 
@@ -100,9 +102,10 @@ Known mappings are:
 | `docker.io/hectorm/xubuntu:<tag>` or `hectorm/xubuntu:<tag>`       | `gui`                        | Image default         |
 
 The `dev` profile mounts one named volume, `devrun`, at the canonical container
-home `/home/devuser`. Podman requests ownership adjustment and private SELinux
-relabeling for this volume. GUI mappings do not use the `dev` profile, so they
-preserve image account policy and do not mount the shared home volume.
+home `/home/devuser`. Podman requests ownership adjustment and shared SELinux
+relabeling for this volume because development containers share it. GUI
+mappings do not use the `dev` profile, so they preserve image account policy
+and do not mount the shared home volume.
 
 Docker does not have an equivalent to Podman's volume ownership adjustment.
 Writable shared-home behavior for Docker remains unverified; use Podman for
