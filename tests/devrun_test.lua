@@ -391,19 +391,23 @@ test("invalid optional home mounts fail before engine side effects", function()
 end)
 
 test("connext mounts an existing license at the versioned SDK path", function()
-  local options = devrun.parse_args({
-    "rticom/connext-sdk:7.7.0", "--engine", "podman", "--dry-run",
-  })
-  local context = fake_context("podman")
-  local launch = devrun.resolve_launch(options, devrun.config, context)
-  devrun.filter_optional_mounts(launch, function(path)
-    return path == devrun.config.defaults.license_file
-  end, function() end)
-  local command = devrun.build_command(options, launch, context)
-
-  contains(command, devrun.config.defaults.license_file
+  local mount = devrun.config.defaults.license_file
     .. ":/opt/rti.com/rti_connext_dds-"
-    .. devrun.config.defaults.connext_version .. "/rti_license.dat:ro")
+    .. devrun.config.defaults.connext_version .. "/rti_license.dat:ro"
+  for _, engine in ipairs({ "docker", "podman" }) do
+    local options = devrun.parse_args({
+      "rticom/connext-sdk:7.7.0", "--engine", engine, "--dry-run",
+    })
+    local context = fake_context(engine)
+    local launch = devrun.resolve_launch(options, devrun.config, context)
+    devrun.filter_optional_mounts(launch, function(path)
+      return path == devrun.config.defaults.license_file
+    end, function() end)
+    local command = devrun.build_command(options, launch, context)
+
+    contains(command, mount .. (engine == "podman" and ",z" or ""))
+    if engine == "docker" then not_contains(command, mount .. ",z") end
+  end
 end)
 
 test("connext warns and continues when the license is absent", function()
@@ -1061,7 +1065,7 @@ test("network and license shell metacharacters remain quoted", function()
   assert(rendered:find(devrun.shell_quote("team net;$(false)'x"), 1, true), rendered)
   assert(rendered:find(devrun.shell_quote("/tmp/license path;$(false)'x.dat:"
     .. "/opt/rti.com/rti_connext_dds-" .. devrun.config.defaults.connext_version
-    .. "/rti_license.dat:ro"), 1, true), rendered)
+    .. "/rti_license.dat:ro,z"), 1, true), rendered)
 end)
 
 local failures = 0

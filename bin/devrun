@@ -121,6 +121,7 @@ devrun.config = {
             source = license_file,
             target = "/opt/rti.com/rti_connext_dds-" .. version .. "/rti_license.dat",
             readonly = true,
+            relabel = "shared",
             missing_message = "RTI license file does not exist; continuing without mount: "
               .. license_file,
           },
