@@ -390,6 +390,28 @@ test("invalid optional home mounts fail before engine side effects", function()
   equal(capture_calls, 0)
 end)
 
+test("optional home mounts require HOME before path probes or side effects", function()
+  local errors = {}
+  local path_exists_calls, execute_calls, capture_calls = 0, 0, 0
+  local status = devrun.run({
+    "image", "-p", "dev", "--engine", "docker",
+  }, {
+    cwd = "/tmp/project",
+    home = "",
+    stderr = function(value) errors[#errors + 1] = value end,
+    path_exists = function() path_exists_calls = path_exists_calls + 1 end,
+    execute = function() execute_calls = execute_calls + 1 end,
+    capture = function() capture_calls = capture_calls + 1 end,
+  })
+
+  equal(status, 2)
+  equal(path_exists_calls, 0)
+  equal(execute_calls, 0)
+  equal(capture_calls, 0)
+  assert(joined(errors):match("HOME must be set when optional_home_mounts are configured"),
+    joined(errors))
+end)
+
 test("connext mounts an existing license at the versioned SDK path", function()
   local mount = devrun.config.defaults.license_file
     .. ":/opt/rti.com/rti_connext_dds-"

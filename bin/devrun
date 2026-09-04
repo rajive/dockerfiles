@@ -324,6 +324,12 @@ function devrun.resolve_launch(options, config, context)
   if #options.profiles == 0 and mapping then
     merge(resolved, mapping.overrides)
   end
+  local optional_home_mounts = resolved.optional_home_mounts or {}
+  if (#(optional_home_mounts.readonly or {}) > 0
+      or #(optional_home_mounts.writable or {}) > 0)
+      and (type(context.home) ~= "string" or context.home == "") then
+    fail("HOME must be set when optional_home_mounts are configured", 1)
+  end
   if resolved.home_volume and resolved.container_home then
     -- A named home volume persists tool state; ownership is an adapter request,
     -- not a request to alter ownership of bind-mounted host paths.
@@ -634,7 +640,7 @@ function devrun.run(arguments, dependencies)
 
   local context = {
     cwd = dependencies.cwd or current_directory(),
-    home = getenv("HOME", ""),
+    home = dependencies.home ~= nil and dependencies.home or getenv("HOME", ""),
     username = getenv("USER", nil),
     env = { TERM = os.getenv("TERM") },
     engine = select_engine(options, devrun.config),
