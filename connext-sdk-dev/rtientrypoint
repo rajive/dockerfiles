@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+
+eval "$(rtienv-${CONNEXT_VERSION} 2>/dev/null)"
+. /etc/os-release
+
+print_centered() {
+  text=$1
+  printf '%*s\n' "$(((79 + ${#text}) / 2))" "$text"
+}
+
+printf '%s\n\n' '###############################################################################'
+print_centered "${PRETTY_NAME}"
+print_centered "RTI Connext DDS ${CONNEXT_VERSION}"
+printf '\n'
+printf '%s\n' '###############################################################################'
+
+exec "$@"
