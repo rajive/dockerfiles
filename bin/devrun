@@ -66,7 +66,6 @@ devrun.config = {
             ".gitconfig",
             ".gitignore",
             ".gitignore_global",
-            ".clangd",
             ".markdownlint.yaml",
             ".profile",
             ".scripts/",

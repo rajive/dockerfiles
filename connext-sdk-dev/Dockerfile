@@ -70,6 +70,9 @@ RUN groupadd --gid 1010 rtigroup && \
   mkdir -p "/home/rtiuser/rti_workspace/${CONNEXT_VERSION}" && \
   chown -R rtiuser:rtigroup /home/rtiuser
 
+COPY --chmod=0644 .clangd /.clangd
+RUN sed -i "s|@NDDSHOME@|${NDDSHOME}|g" /.clangd
+
 COPY --chmod=0755 rtientrypoint /usr/local/bin/rtientrypoint
 
 USER rtiuser

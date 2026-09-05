@@ -192,8 +192,7 @@ It:
 - Passes relevant terminal and timezone environment variables.
 - Mounts an explicit allowlist of host development configuration.
 
-Initial allowlisted paths may include Neovim configuration, Git configuration,
-and clangd configuration.
+Initial allowlisted paths may include Neovim and Git configuration.
 They use a compact schema of paths relative to both the host home and the
 resolved container home:
 
@@ -211,7 +210,6 @@ optional_home_mounts = {
     ".gitconfig",
     ".gitignore",
     ".gitignore_global",
-    ".clangd",
     ".markdownlint.yaml",
     ".profile",
     ".scripts/",
@@ -223,6 +221,16 @@ optional_home_mounts = {
   },
 }
 ```
+
+The host's clangd configuration is deliberately excluded because it may contain
+host-specific paths and compiler flags. Projects are responsible for exposing
+container-compatible build metadata such as `compile_commands.json`; Connext
+builds can derive SDK paths from the container's `NDDSHOME` environment
+variable. The `connext-sdk-dev` image additionally installs an image-specific
+`/.clangd` and resolves its SDK include paths from `NDDSHOME` at build time.
+Because projects are mounted under `/workspace`, clangd discovers this file as
+an ancestor configuration; projects may add `/workspace/.clangd` for
+project-specific settings.
 
 Absolute paths, empty paths, `.` path components, `..` path components, and
 non-string entries are configuration errors. Read-only entries are emitted

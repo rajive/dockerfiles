@@ -31,13 +31,22 @@ that entry. Development launches consistently use `devuser` and
 `/home/devuser`, regardless of the host account or image. Podman privately
 relabels the workspace bind mount for SELinux.
 
-Existing `~/.config/nvim`, `~/.gitconfig`, and `~/.clangd` paths are mounted
-read-only. `~/.config/nvim/lazy-lock.json` is mounted afterward as writable,
+Existing `~/.config/nvim` and `~/.gitconfig` paths are mounted read-only.
+`~/.config/nvim/lazy-lock.json` is mounted afterward as writable,
 overriding that nested location so Neovim can update its lock file. Missing
 paths are skipped with warnings. Podman uses shared SELinux relabeling for both
 read-only and writable host-home binds so concurrent development containers can
 use them. The launcher does not search for a repository root or mount the rest
 of the host home.
+
+Host clangd configuration is not mounted because it may contain host-specific
+paths and flags. Projects should provide container-compatible build metadata,
+such as `compile_commands.json`; Connext builds can resolve SDK paths from the
+container's `NDDSHOME` environment variable. The `connext-sdk-dev` image also
+installs its own Connext-specific `/.clangd`, with SDK include paths resolved
+from `NDDSHOME` when the image is built. Because projects are mounted under
+`/workspace`, clangd discovers this file as an ancestor configuration; projects
+may add `/workspace/.clangd` for project-specific settings.
 
 ## Command Line
 
@@ -137,7 +146,6 @@ optional_home_mounts = {
     ".gitconfig",
     ".gitignore",
     ".gitignore_global",
-    ".clangd",
     ".markdownlint.yaml",
     ".profile",
     ".scripts/",

@@ -304,19 +304,19 @@ test("dev expands and renders ordered optional home mounts", function()
     })
     local context = fake_context(engine)
     local launch = devrun.resolve_launch(options, devrun.config, context)
-    equal(#launch.optional_mounts, 18)
+    equal(#launch.optional_mounts, 17)
     equal(launch.optional_mounts[1].source, "/home/Test User/.bash_logout")
     equal(launch.optional_mounts[1].target, "/home/devuser/.bash_logout")
     equal(launch.optional_mounts[1].readonly, true)
     equal(launch.optional_mounts[1].relabel, "shared")
-    equal(launch.optional_mounts[18].source,
+    equal(launch.optional_mounts[17].source,
       "/home/Test User/.config/nvim/lazy-lock.json")
-    equal(launch.optional_mounts[18].readonly, false)
-    equal(launch.optional_mounts[18].relabel, "shared")
+    equal(launch.optional_mounts[17].readonly, false)
+    equal(launch.optional_mounts[17].relabel, "shared")
 
     local warnings = {}
-    devrun.filter_optional_mounts(launch, function(path)
-      return path ~= "/home/Test User/.clangd"
+    devrun.filter_optional_mounts(launch, function()
+      return true
     end, function(message)
       warnings[#warnings + 1] = message
     end)
@@ -332,8 +332,7 @@ test("dev expands and renders ordered optional home mounts", function()
     contains(command, parent)
     contains(command, "/home/Test User/.gitconfig:/home/devuser/.gitconfig:ro"
       .. (engine == "podman" and ",z" or ""))
-    not_contains(command, "/home/Test User/.clangd:/home/devuser/.clangd:ro"
-      .. (engine == "podman" and ",z" or ""))
+    not_contains(command, ".clangd")
     contains(command, lock)
     if engine == "podman" then
       not_contains(command, "/home/Test User/.config/nvim/:/home/devuser/.config/nvim/:ro,Z")
@@ -341,8 +340,7 @@ test("dev expands and renders ordered optional home mounts", function()
         .. "/home/devuser/.config/nvim/lazy-lock.json:Z")
     end
     assert(index_of(command, parent) < index_of(command, lock), engine)
-    equal(#warnings, 1)
-    assert(warnings[1]:match("%.clangd"), warnings[1])
+    equal(#warnings, 0)
   end
 end)
 
@@ -1055,7 +1053,7 @@ test("explicit generic dev replaces Connext work", function()
   })
 
   equal(status, 0)
-  equal(#path_checks, 18)
+  equal(#path_checks, 17)
   local rendered = joined(output)
   assert(not rendered:match("network"), rendered)
   assert(not rendered:match("rti_license"), rendered)
